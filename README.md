@@ -4,8 +4,11 @@ A personal study binder for the IB Diploma. Notes, tasks, projects, and PDF
 files for each subject, with SL/HL levels and deadlines.
 
 **Features**
-- Notes, tasks, and projects per subject, with due dates and status.
-- **PDF files per class** — upload worksheets or notes and they sync everywhere.
+- Four sections per subject: **Notes, Tasks, Projects, and Exam prep** (past papers).
+- **PDF files organized by section** — upload a PDF straight into Notes, Tasks,
+  Projects, or Exam prep; they sync everywhere and render in-app.
+- **Deadlines on any task, project, or exam item**, editable anytime, shown in a
+  combined "Upcoming deadlines" list.
 - **SL/HL per class** — pick your level once and it's remembered on every device.
 - **Settings** — color theme (Paper / Light / Dark), class sort order, and a
   hide-completed-tasks option, all synced.
