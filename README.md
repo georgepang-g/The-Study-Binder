@@ -124,10 +124,13 @@ Email/password sign-in does not need this.
 - Everything you file syncs automatically. There's also a **Download study
   guide (.txt)** button in the sidebar for an offline copy.
 - **Uploading PDFs:** open a subject, then use **+ Upload PDF** in its Files
-  section. PDFs are stored in Firestore, so on the free (Spark) plan each PDF must
-  be under **700 KB** — Firestore caps any single document at ~1 MB and the file is
-  encoded inside it. If a PDF is too big, compress it first (e.g.
-  <https://smallpdf.com/compress-pdf>). Need bigger files? Upgrade the project to
+  section. PDFs are stored in Firestore. Because Firestore caps any single
+  document at ~1 MB, each PDF is base64-encoded and split into chunk documents
+  (`binders/{uid}/files/{id}_c0`, `_c1`, …) that are stitched back together when
+  you open it — all inside the same `files` sub-collection, so no extra rules are
+  needed. Each PDF can be up to **15 MB**. This all stays on the free (Spark)
+  plan; the plan's real ceiling is **1 GiB of total storage** shared across all
+  files. Need more (lots of large files, or many users)? Upgrade the project to
   the Blaze plan and switch uploads to Firebase Storage — ask and it can be added.
 - **Your level (SL/HL):** each subject page has an SL/HL toggle next to "+ Add".
   Tap it once; your choice is saved to that course and follows you everywhere.

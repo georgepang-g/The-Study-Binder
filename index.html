@@ -644,10 +644,12 @@
   var levelFilter = 'All';
   var quickAddOpen = false;
 
-  // Firestore caps a single document at ~1MB and base64 inflates a file by ~37%,
-  // so the whole PDF (stored in its own doc) must stay comfortably under that.
-  var MAX_FILE_BYTES = 700 * 1024;
-  var MAX_FILE_LABEL = '700 KB';
+  // Firestore caps a single document at ~1MB, so a PDF is base64-encoded and
+  // split into chunk documents (binders/{uid}/files/{id}_c{n}). The metadata in
+  // FILES records how many chunks a file has; open/delete work across them.
+  var MAX_FILE_BYTES = 15 * 1024 * 1024;   // 15MB raw upload ceiling
+  var MAX_FILE_LABEL = '15 MB';
+  var CHUNK_CHARS = 800000;                // base64 chars per chunk doc (< 1MB limit)
 
   // Firebase handles
   var auth = null, db = null, currentUser = null;
@@ -906,48 +908,68 @@
       return;
     }
     if (!binderRef || !currentUser){ setHint('Not connected yet — try again in a moment.', true); return; }
-    setHint('Uploading “' + file.name + '”…');
+    setHint('Reading “' + file.name + '”…');
     var reader = new FileReader();
     reader.onload = async function(){
+      var id = uid('file');
+      var written = 0;
       try{
-        var id = uid('file');
-        await setDoc(doc(db, 'binders', currentUser.uid, 'files', id), {
-          data: reader.result,           // data:application/pdf;base64,....
-          name: file.name,
-          type: 'application/pdf',
-          size: file.size,
-          createdAt: Date.now()
-        });
+        var dataUrl = reader.result;   // data:application/pdf;base64,....
+        var parts = [];
+        for (var i=0; i<dataUrl.length; i += CHUNK_CHARS){
+          parts.push(dataUrl.slice(i, i + CHUNK_CHARS));
+        }
+        // Write every chunk first, so a half-finished upload never shows up.
+        for (var j=0; j<parts.length; j++){
+          setHint('Uploading “' + file.name + '” — ' + (j+1) + '/' + parts.length + '…');
+          await setDoc(doc(db, 'binders', currentUser.uid, 'files', id + '_c' + j), { i:j, data: parts[j] });
+          written = j + 1;
+        }
         FILES.push({
           id: id, subject: subjId, name: file.name, size: file.size,
-          level: courseLevel(subjId) || 'SL', createdAt: Date.now()
+          level: courseLevel(subjId) || 'SL', createdAt: Date.now(), chunks: parts.length
         });
         await persist();
         renderPage();
       }catch(err){
         console.error('Upload failed', err);
         setHint('Upload failed. Your Firestore rules may still need the files sub-collection — see README.md.', true);
+        // Best-effort cleanup of any chunks that did land.
+        for (var k=0; k<written; k++){
+          deleteDoc(doc(db, 'binders', currentUser.uid, 'files', id + '_c' + k)).catch(function(){});
+        }
       }
     };
     reader.onerror = function(){ setHint('Could not read that file — try again.', true); };
     reader.readAsDataURL(file);
   }
 
+  function fileChunkIds(id, chunks){
+    var ids = [];
+    var n = chunks || 1;
+    for (var i=0; i<n; i++){ ids.push(id + '_c' + i); }
+    return ids;
+  }
+
   async function openFile(id){
     var meta = FILES.find(function(f){ return f.id===id; });
+    if (!meta) return;
     try{
-      var snap = await getDoc(doc(db, 'binders', currentUser.uid, 'files', id));
-      if (!snap.exists()){
-        alert('This PDF could not be found. It may still be syncing, or was removed on another device.');
+      var snaps = await Promise.all(fileChunkIds(id, meta.chunks).map(function(cid){
+        return getDoc(doc(db, 'binders', currentUser.uid, 'files', cid));
+      }));
+      if (snaps.some(function(s){ return !s.exists(); })){
+        alert('This PDF could not be fully loaded. It may still be syncing to this device — try again in a moment.');
         return;
       }
-      var blob = await (await fetch(snap.data().data)).blob();
+      var dataUrl = snaps.map(function(s){ return s.data().data; }).join('');
+      var blob = await (await fetch(dataUrl)).blob();
       var url = URL.createObjectURL(blob);
       var win = window.open(url, '_blank');
       if (!win){
         // Popup blocked — download it instead.
         var a = document.createElement('a');
-        a.href = url; a.download = (meta && meta.name) || 'file.pdf';
+        a.href = url; a.download = meta.name || 'file.pdf';
         document.body.appendChild(a); a.click(); document.body.removeChild(a);
       }
       setTimeout(function(){ URL.revokeObjectURL(url); }, 60000);
@@ -960,11 +982,15 @@
   async function deleteFile(id){
     var meta = FILES.find(function(f){ return f.id===id; });
     if (meta && !confirm('Remove “' + meta.name + '” from this class? This deletes the PDF on all your devices.')){ return; }
+    var ids = fileChunkIds(id, meta ? meta.chunks : 1);
     FILES = FILES.filter(function(f){ return f.id!==id; });
     await persist();
     renderPage();
-    try{ await deleteDoc(doc(db, 'binders', currentUser.uid, 'files', id)); }
-    catch(err){ console.error('Could not delete file blob', err); }
+    try{
+      await Promise.all(ids.map(function(cid){
+        return deleteDoc(doc(db, 'binders', currentUser.uid, 'files', cid));
+      }));
+    }catch(err){ console.error('Could not delete file chunks', err); }
   }
 
   function fmtDate(ts){
