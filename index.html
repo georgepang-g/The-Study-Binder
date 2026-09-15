@@ -299,12 +299,24 @@
     grid-template-columns:1fr 1fr 1fr;
     gap:20px;
   }
+  .columns.four{grid-template-columns:repeat(4, 1fr);}
   .col-head{
     display:flex; justify-content:space-between; align-items:baseline;
     margin-bottom:12px;
   }
   .col-head h4{font-size:14px; font-weight:600; text-transform:none;}
   .col-head span{font-size:12px; color:var(--ink-soft);}
+  .col-files-label{
+    font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.04em;
+    color:var(--ink-soft); margin:6px 0 8px;
+  }
+  .col-upload{
+    display:block; text-align:center; cursor:pointer;
+    border:1px dashed var(--rule); color:var(--ink-soft); background:transparent;
+    border-radius:7px; padding:8px; font-size:12.5px; margin-top:6px;
+  }
+  .col-upload:hover{border-color:var(--accent, var(--ink-soft)); color:var(--accent, var(--ink));}
+  .col-upstatus{font-size:11px; color:var(--ink-soft); margin-top:6px; line-height:1.4; min-height:1px;}
 
   .card{
     background:var(--card);
@@ -551,8 +563,14 @@
     margin-right:8px; border:1px solid rgba(128,128,128,0.4);
   }
 
+  @media (max-width: 1120px){
+    .columns.four{grid-template-columns:1fr 1fr;}
+  }
   @media (max-width: 900px){
     .columns{grid-template-columns:1fr;}
+  }
+  @media (max-width: 640px){
+    .columns.four{grid-template-columns:1fr;}
   }
   @media (max-width: 760px){
     .app{flex-direction:column;}
@@ -936,8 +954,7 @@
   /* ---------------- PDF files ---------------- */
   // Each PDF lives in its own document at binders/{uid}/files/{id} so the main
   // binder document stays small; only lightweight metadata rides along in FILES.
-  function handleFileUpload(file, subjId){
-    var hint = document.getElementById('uploadHint');
+  function handleFileUpload(file, subjId, section, hint){
     function setHint(msg, isErr){
       if (hint){ hint.textContent = msg; hint.style.color = isErr ? '#a6512e' : 'var(--ink-soft)'; }
     }
@@ -968,7 +985,7 @@
           written = j + 1;
         }
         FILES.push({
-          id: id, subject: subjId, name: file.name, size: file.size,
+          id: id, subject: subjId, section: section || 'notes', name: file.name, size: file.size,
           level: courseLevel(subjId) || 'SL', createdAt: Date.now(), chunks: parts.length
         });
         await persist();
@@ -1141,6 +1158,7 @@
     if (!e.dueDate) return false;
     if (e.type === 'project') return e.status !== 'Done';
     if (e.type === 'task') return !e.done;
+    if (e.type === 'exam') return true;
     return false;
   }
 
@@ -1271,7 +1289,7 @@
 
     var deadlineHtml = allDeadlines.length ? '<ul class="deadline-list">' + allDeadlines.map(function(e){
       var subj = subjectById(e.subject);
-      var kind = e.type==='task' ? 'Task' : 'Project';
+      var kind = e.type==='task' ? 'Task' : (e.type==='exam' ? 'Exam' : 'Project');
       return '<li><span>' + escapeHtml(e.title) + ' <span class="d-when">— ' + (subj?subj.short:'') + ' · ' + kind + '</span></span><span class="d-when">' + dueLabel(e.dueDate) + '</span></li>';
     }).join('') + '</ul>' : '<div class="empty">No upcoming deadlines yet. Add a deadline to any task or project and it will appear here.</div>';
 
@@ -1290,6 +1308,104 @@
     );
   }
 
+  // The four sections of a subject. Each holds its own entries (by type) and its
+  // own uploaded PDFs (by file.section).
+  var SECTIONS = [
+    { id:'notes',    type:'note',    title:'Notes' },
+    { id:'tasks',    type:'task',    title:'Tasks' },
+    { id:'projects', type:'project', title:'Projects' },
+    { id:'exam',     type:'exam',    title:'Exam prep' }
+  ];
+  function fileSection(f){
+    var v = f.section;
+    return (v==='notes' || v==='tasks' || v==='projects' || v==='exam') ? v : 'notes';
+  }
+
+  function renderNoteCard(n, accent){
+    return '<div class="card" style="--accent:' + accent + '">' +
+      '<div class="card-top"><h5>' + escapeHtml(n.title) + '</h5><button class="del" data-del="' + n.id + '" title="Remove">×</button></div>' +
+      (n.body ? '<p>' + escapeHtml(n.body) + '</p>' : '') +
+      '<div class="meta">' + n.level + ' · ' + fmtDate(n.createdAt) + '</div>' +
+    '</div>';
+  }
+  function renderTaskCard(t, accent){
+    return '<div class="card" style="--accent:' + accent + '">' +
+      '<div class="card-top task-row' + (t.done?' done':'') + '">' +
+        '<input type="checkbox" data-toggle="' + t.id + '" ' + (t.done?'checked':'') + '/>' +
+        '<div style="flex:1"><h5>' + escapeHtml(t.title) + '</h5>' + (t.body ? '<p>'+escapeHtml(t.body)+'</p>' : '') + '</div>' +
+        '<button class="del" data-del="' + t.id + '" title="Remove">×</button>' +
+      '</div>' +
+      deadlineControl(t) +
+      '<div class="meta">' + t.level + ' · ' + fmtDate(t.createdAt) + '</div>' +
+    '</div>';
+  }
+  function renderProjectCard(p, accent){
+    return '<div class="card" style="--accent:' + accent + '">' +
+      '<div class="card-top"><h5>' + escapeHtml(p.title) + '</h5><button class="del" data-del="' + p.id + '" title="Remove">×</button></div>' +
+      (p.body ? '<p>' + escapeHtml(p.body) + '</p>' : '') +
+      deadlineControl(p) +
+      '<span class="status-pill" data-status="' + p.id + '" style="background:' + statusColor(p.status) + '">' + p.status + '</span>' +
+      '<div class="meta">' + p.level + ' · ' + fmtDate(p.createdAt) + '</div>' +
+    '</div>';
+  }
+  function renderExamCard(e, accent){
+    return '<div class="card" style="--accent:' + accent + '">' +
+      '<div class="card-top"><h5>' + escapeHtml(e.title) + '</h5><button class="del" data-del="' + e.id + '" title="Remove">×</button></div>' +
+      (e.body ? '<p>' + escapeHtml(e.body) + '</p>' : '') +
+      deadlineControl(e) +
+      '<div class="meta">' + e.level + ' · ' + fmtDate(e.createdAt) + '</div>' +
+    '</div>';
+  }
+  function renderFileCard(f, accent){
+    return '<div class="file-card" style="--accent:' + accent + '">' +
+      '<span class="fi">📄</span>' +
+      '<div class="fmeta"><h5>' + escapeHtml(f.name) + '</h5><span>' + formatSize(f.size) + ' · ' + fmtDate(f.createdAt) + '</span></div>' +
+      '<button class="file-open" data-openfile="' + f.id + '" style="--accent:' + accent + '">Open</button>' +
+      '<button class="del" data-delfile="' + f.id + '" title="Remove">×</button>' +
+    '</div>';
+  }
+
+  function renderColumn(sec, s, items, accent){
+    var entries = items.filter(function(e){ return e.type===sec.type; });
+    if (sec.type==='note'){
+      entries.sort(function(a,b){ return b.createdAt-a.createdAt; });
+    } else if (sec.type==='task'){
+      entries.sort(function(a,b){ return (a.done?1:0)-(b.done?1:0) || b.createdAt-a.createdAt; });
+      if (SETTINGS.hideCompleted){ entries = entries.filter(function(t){ return !t.done; }); }
+    } else { // project, exam
+      entries.sort(function(a,b){
+        if (a.dueDate && b.dueDate) return new Date(a.dueDate)-new Date(b.dueDate);
+        return b.createdAt-a.createdAt;
+      });
+    }
+    var files = FILES.filter(function(f){ return f.subject===s.id && fileSection(f)===sec.id; })
+                     .sort(function(a,b){ return b.createdAt-a.createdAt; });
+
+    var entryHtml = entries.map(function(e){
+      if (sec.type==='note')    return renderNoteCard(e, accent);
+      if (sec.type==='task')    return renderTaskCard(e, accent);
+      if (sec.type==='project') return renderProjectCard(e, accent);
+      return renderExamCard(e, accent);
+    }).join('');
+    var fileHtml = files.map(function(f){ return renderFileCard(f, accent); }).join('');
+
+    var count = (sec.type==='task')
+      ? entries.filter(function(t){ return !t.done; }).length + ' open'
+      : String(entries.length + files.length);
+
+    var body = (!entries.length && !files.length)
+      ? '<div class="empty">Nothing here yet.</div>'
+      : (entryHtml + (files.length ? (entries.length ? '<div class="col-files-label">Files</div>' : '') + fileHtml : ''));
+
+    return '<div class="col">' +
+      '<div class="col-head"><h4>' + sec.title + '</h4><span>' + count + '</span></div>' +
+      body +
+      '<label class="col-upload" style="--accent:' + accent + '">+ Upload PDF' +
+        '<input type="file" class="col-file" data-section="' + sec.id + '" accept="application/pdf,.pdf" hidden></label>' +
+      '<div class="col-upstatus" data-upstatus="' + sec.id + '"></div>' +
+    '</div>';
+  }
+
   function renderSubject(subjId){
     var s = activeSubjects().find(function(a){ return a.id===subjId; });
     if (!s){
@@ -1299,55 +1415,8 @@
       return renderOverview();
     }
     var items = ENTRIES.filter(function(e){ return e.subject===subjId; });
-    var notes = items.filter(function(e){ return e.type==='note'; }).sort(function(a,b){return b.createdAt-a.createdAt;});
-    var tasks = items.filter(function(e){ return e.type==='task'; }).sort(function(a,b){return (a.done?1:0)-(b.done?1:0) || b.createdAt-a.createdAt;});
-    if (SETTINGS.hideCompleted){ tasks = tasks.filter(function(t){ return !t.done; }); }
-    var projects = items.filter(function(e){ return e.type==='project'; }).sort(function(a,b){
-      if (a.dueDate && b.dueDate) return new Date(a.dueDate)-new Date(b.dueDate);
-      return b.createdAt-a.createdAt;
-    });
-    var subjFiles = FILES.filter(function(f){ return f.subject===subjId; }).sort(function(a,b){ return b.createdAt-a.createdAt; });
-
     var accent = s.color;
-
-    var notesHtml = notes.length ? notes.map(function(n){
-      return '<div class="card" style="--accent:' + accent + '">' +
-        '<div class="card-top"><h5>' + escapeHtml(n.title) + '</h5><button class="del" data-del="' + n.id + '" title="Remove">×</button></div>' +
-        (n.body ? '<p>' + escapeHtml(n.body) + '</p>' : '') +
-        '<div class="meta">' + n.level + ' · ' + fmtDate(n.createdAt) + '</div>' +
-      '</div>';
-    }).join('') : '<div class="empty">No notes yet for ' + s.short + '. Add one above.</div>';
-
-    var tasksHtml = tasks.length ? tasks.map(function(t){
-      return '<div class="card" style="--accent:' + accent + '">' +
-        '<div class="card-top task-row' + (t.done?' done':'') + '">' +
-          '<input type="checkbox" data-toggle="' + t.id + '" ' + (t.done?'checked':'') + '/>' +
-          '<div style="flex:1"><h5>' + escapeHtml(t.title) + '</h5>' + (t.body ? '<p>'+escapeHtml(t.body)+'</p>' : '') + '</div>' +
-          '<button class="del" data-del="' + t.id + '" title="Remove">×</button>' +
-        '</div>' +
-        deadlineControl(t) +
-        '<div class="meta">' + t.level + ' · ' + fmtDate(t.createdAt) + '</div>' +
-      '</div>';
-    }).join('') : '<div class="empty">No' + (SETTINGS.hideCompleted?' open':'') + ' tasks for ' + s.short + '. Add one above.</div>';
-
-    var projectsHtml = projects.length ? projects.map(function(p){
-      return '<div class="card" style="--accent:' + accent + '">' +
-        '<div class="card-top"><h5>' + escapeHtml(p.title) + '</h5><button class="del" data-del="' + p.id + '" title="Remove">×</button></div>' +
-        (p.body ? '<p>' + escapeHtml(p.body) + '</p>' : '') +
-        deadlineControl(p) +
-        '<span class="status-pill" data-status="' + p.id + '" style="background:' + statusColor(p.status) + '">' + p.status + '</span>' +
-        '<div class="meta">' + p.level + ' · ' + fmtDate(p.createdAt) + '</div>' +
-      '</div>';
-    }).join('') : '<div class="empty">No projects yet for ' + s.short + '. Add one above.</div>';
-
-    var filesHtml = subjFiles.length ? subjFiles.map(function(f){
-      return '<div class="file-card" style="--accent:' + accent + '">' +
-        '<span class="fi">📄</span>' +
-        '<div class="fmeta"><h5>' + escapeHtml(f.name) + '</h5><span>' + formatSize(f.size) + ' · ' + fmtDate(f.createdAt) + '</span></div>' +
-        '<button class="file-open" data-openfile="' + f.id + '" style="--accent:' + accent + '">Open</button>' +
-        '<button class="del" data-delfile="' + f.id + '" title="Remove">×</button>' +
-      '</div>';
-    }).join('') : '<div class="empty">No PDFs yet for ' + s.short + '. Upload one to keep it filed with this class.</div>';
+    var colsHtml = SECTIONS.map(function(sec){ return renderColumn(sec, s, items, accent); }).join('');
 
     return (
       '<div class="page-header" style="--accent:' + accent + '">' +
@@ -1361,19 +1430,7 @@
         '</div>' +
       '</div>' +
       renderQuickAdd(subjId, s.myLevel, accent) +
-      '<div class="files-section">' +
-        '<div class="files-head"><h3>Files</h3>' +
-          '<label class="upload-btn" style="--accent:' + accent + '">+ Upload PDF' +
-            '<input type="file" id="fileInput" accept="application/pdf,.pdf" hidden></label>' +
-        '</div>' +
-        '<div class="files-grid">' + filesHtml + '</div>' +
-        '<div class="upload-hint" id="uploadHint">PDFs up to ' + MAX_FILE_LABEL + ' each — they sync to all your devices.</div>' +
-      '</div>' +
-      '<div class="columns">' +
-        '<div class="col"><div class="col-head"><h4>Notes</h4><span>' + notes.length + '</span></div>' + notesHtml + '</div>' +
-        '<div class="col"><div class="col-head"><h4>Tasks</h4><span>' + tasks.filter(function(t){return !t.done;}).length + ' open</span></div>' + tasksHtml + '</div>' +
-        '<div class="col"><div class="col-head"><h4>Projects</h4><span>' + projects.length + '</span></div>' + projectsHtml + '</div>' +
-      '</div>'
+      '<div class="columns four">' + colsHtml + '</div>'
     );
   }
 
@@ -1426,7 +1483,7 @@
       '<div class="quick-add' + (quickAddOpen?' open':'') + '" id="quickAddForm">' +
         '<div class="qa-row">' +
           '<label>Type' +
-            '<select id="qaType"><option value="note">Note</option><option value="task">Task</option><option value="project">Project</option></select>' +
+            '<select id="qaType"><option value="note">Note</option><option value="task">Task</option><option value="project">Project</option><option value="exam">Exam prep</option></select>' +
           '</label>' +
           '<label>Subject<select id="qaSubject">' + subjOptions + '</select></label>' +
           '<label>Level<select id="qaLevel">' +
@@ -1513,15 +1570,16 @@
       });
     });
 
-    // PDF files: upload, open, delete
-    var fileInput = document.getElementById('fileInput');
-    if (fileInput){
-      fileInput.addEventListener('change', function(){
-        var f = fileInput.files && fileInput.files[0];
-        if (f){ handleFileUpload(f, currentView); }
-        fileInput.value = ''; // let the same file be re-picked later
+    // PDF files: upload into a specific section, open, delete
+    document.querySelectorAll('.col-file').forEach(function(input){
+      input.addEventListener('change', function(){
+        var f = input.files && input.files[0];
+        var section = input.getAttribute('data-section');
+        var status = document.querySelector('[data-upstatus="' + section + '"]');
+        if (f){ handleFileUpload(f, currentView, section, status); }
+        input.value = ''; // let the same file be re-picked later
       });
-    }
+    });
     document.querySelectorAll('[data-openfile]').forEach(function(b){
       b.addEventListener('click', function(){ openFile(b.getAttribute('data-openfile')); });
     });
@@ -1564,7 +1622,7 @@
     if (typeSel){
       var syncQaFields = function(){
         var t = typeSel.value;
-        document.getElementById('qaDueRow').style.display = (t==='task' || t==='project') ? 'flex' : 'none';
+        document.getElementById('qaDueRow').style.display = (t==='task' || t==='project' || t==='exam') ? 'flex' : 'none';
         document.getElementById('qaStatusWrap').style.display = (t==='project') ? 'flex' : 'none';
       };
       typeSel.addEventListener('change', syncQaFields);
@@ -1595,6 +1653,9 @@
         if (type==='project'){
           entry.dueDate = document.getElementById('qaDue').value || null;
           entry.status = document.getElementById('qaStatus').value;
+        }
+        if (type==='exam'){
+          entry.dueDate = document.getElementById('qaDue').value || null;
         }
         addEntry(entry);
         quickAddOpen = false;
@@ -1699,6 +1760,7 @@
       var notes = items.filter(function(e){ return e.type==='note'; });
       var tasks = items.filter(function(e){ return e.type==='task'; });
       var projects = items.filter(function(e){ return e.type==='project'; });
+      var exams = items.filter(function(e){ return e.type==='exam'; });
 
       if (notes.length){
         lines.push('\n-- Notes --');
@@ -1718,6 +1780,13 @@
         projects.forEach(function(p){
           lines.push('* [' + p.level + '] ' + p.title + ' — ' + p.status + (p.dueDate ? ' — due ' + p.dueDate : ''));
           if (p.body) lines.push('  ' + p.body.replace(/\n/g,'\n  '));
+        });
+      }
+      if (exams.length){
+        lines.push('\n-- Exam prep --');
+        exams.forEach(function(e){
+          lines.push('* [' + e.level + '] ' + e.title + (e.dueDate ? ' — ' + e.dueDate : ''));
+          if (e.body) lines.push('  ' + e.body.replace(/\n/g,'\n  '));
         });
       }
       lines.push('');
