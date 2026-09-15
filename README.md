@@ -138,9 +138,16 @@ placeholder to keep this feature off.
 4. Open your site, click **🎵 Connect Spotify** in the sidebar, and authorize.
    Start playing something on Spotify (any device) and it appears in the corner.
 
+The overlay shows album art, track/artist, a progress bar, **play/pause and skip
+controls**, and a **volume slider**. **Drag it** by the album art or title to move
+it anywhere; it remembers where you put it (default position is the top-right
+corner). Playback and volume controls require Spotify **Premium**.
+
 Notes:
-- Reading "now playing" works on **free** Spotify accounts; only *controlling*
-  playback needs Premium, and this overlay never controls playback.
+- Reading "now playing" works on **free** Spotify accounts. The **play/pause,
+  skip, and volume** controls require **Premium** (Spotify only allows apps to
+  control playback for Premium accounts); on a free account they show a short
+  "needs Premium" note.
 - It shows a song **only while Spotify is actively playing** somewhere; otherwise
   it stays hidden.
 - The Client ID is not a secret (it ships in every Spotify web app). The redirect
