@@ -747,7 +747,7 @@
     <ul class="spine-nav" id="spineNav"></ul>
     <div class="spine-foot">
       <span class="who" id="whoami"></span>
-      <span class="sync-note">Synced to your account across all your devices.</span>
+      <span class="sync-note" id="syncNote">Synced to your account across all your devices.</span>
       <button id="exportBtn" type="button">Export my binder (.txt)</button>
       <button id="spotifyBtn" class="ghost" type="button" hidden>🎵 Connect Spotify</button>
       <button id="signOutBtn" class="ghost" type="button">Sign out</button>
@@ -816,7 +816,8 @@
     createUserWithEmailAndPassword, signOut, GoogleAuthProvider, signInWithPopup, setPersistence, browserLocalPersistence
   } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
   import {
-    getFirestore, doc, onSnapshot, setDoc, getDoc, deleteDoc, serverTimestamp
+    getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager,
+    doc, onSnapshot, setDoc, getDoc, deleteDoc, serverTimestamp
   } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
 
   "use strict";
@@ -854,7 +855,6 @@
   var auth = null, db = null, currentUser = null;
   var binderRef = null, unsubscribeBinder = null;
   var firstSnapshot = true;
-  var suppressNextSave = false; // guard against echoing a remote change back
 
   function configLooksReal(){
     return FIREBASE_CONFIG.apiKey &&
@@ -1018,9 +1018,14 @@
       }
     }, function(err){
       console.error('Sync error', err);
-      document.getElementById('page').innerHTML =
-        '<div class="empty">Could not reach the cloud. Check your connection and refresh. ' +
-        'If this is a fresh setup, confirm your Firestore security rules allow the signed-in user.</div>';
+      // Only take over the screen before anything has loaded — once the binder
+      // is on screen, a transient error shouldn't wipe it (the listener retries
+      // and offline edits are cached locally).
+      if (firstSnapshot){
+        document.getElementById('page').innerHTML =
+          '<div class="empty">Could not reach the cloud. Check your connection and refresh. ' +
+          'If this is a fresh setup, confirm your Firestore security rules allow the signed-in user.</div>';
+      }
     });
   }
 
@@ -2130,7 +2135,18 @@
     document.getElementById('app').hidden = false;
     var who = document.getElementById('whoami');
     who.textContent = currentUser.email || currentUser.displayName || 'Signed in';
+    updateSyncNote();
   }
+
+  function updateSyncNote(){
+    var el = document.getElementById('syncNote');
+    if (!el) return;
+    el.textContent = navigator.onLine
+      ? 'Synced across all your devices.'
+      : 'Offline — changes are saved here and will sync when you reconnect.';
+  }
+  window.addEventListener('online', updateSyncNote);
+  window.addEventListener('offline', updateSyncNote);
 
   /* ---------------- Init ---------------- */
   function bootWithoutConfig(){
@@ -2423,7 +2439,18 @@
 
     var app = initializeApp(FIREBASE_CONFIG);
     auth = getAuth(app);
-    db = getFirestore(app);
+
+    // Durable offline cache: edits made offline are saved locally and sync when
+    // the connection returns, reads work offline, and reloads are instant.
+    // Falls back to the in-memory store if IndexedDB is unavailable.
+    try{
+      db = initializeFirestore(app, {
+        localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
+      });
+    }catch(e){
+      console.warn('Offline cache unavailable, using in-memory Firestore', e);
+      db = getFirestore(app);
+    }
 
     // Keep people signed in across visits and devices.
     setPersistence(auth, browserLocalPersistence).catch(function(){ /* falls back to default */ });
@@ -2435,9 +2462,12 @@
         document.getElementById('page').innerHTML = '<div class="empty">Loading your binder…</div>';
         subscribeBinder();
       } else {
+        // Fully reset in-memory state so nothing leaks to the next account.
         if (unsubscribeBinder){ unsubscribeBinder(); unsubscribeBinder = null; }
-        binderRef = null;
-        ENTRIES = []; DISMISSED = []; MY_COURSES = [];
+        binderRef = null; firstSnapshot = true;
+        ENTRIES = []; DISMISSED = []; MY_COURSES = []; FILES = [];
+        SETTINGS = normalizeSettings(null); applyTheme();
+        currentView = 'overview'; quickAddOpen = false;
         setMsg('');
         showGate();
       }
