@@ -504,6 +504,29 @@
   html.theme-dark .opt-btn:not(.active),
   html.theme-dark .lvl-set:not(.active){ background:#171C21; color:var(--ink-soft); }
 
+  /* ---------- Class colour swatch + picker ---------- */
+  .class-color{
+    width:28px; height:28px; border-radius:50%; padding:0; cursor:pointer;
+    border:2px solid var(--card); box-shadow:0 0 0 1px var(--rule); flex-shrink:0;
+  }
+  .class-color:hover{box-shadow:0 0 0 2px var(--ink-soft);}
+  .color-pop{
+    position:fixed; z-index:70; background:var(--card); color:var(--ink);
+    border:1px solid var(--rule); border-radius:12px; padding:12px;
+    box-shadow:0 14px 44px rgba(0,0,0,0.28);
+  }
+  .color-pop .cp-grid{display:grid; grid-template-columns:repeat(6, 1fr); gap:9px;}
+  .color-pop .cp-sw{
+    width:28px; height:28px; border-radius:50%; border:none; cursor:pointer; padding:0;
+    box-shadow:0 0 0 1px rgba(0,0,0,0.18) inset;
+  }
+  .color-pop .cp-sw.active{outline:2px solid var(--ink); outline-offset:2px;}
+  .color-pop .cp-default{
+    margin-top:11px; width:100%; font-size:12.5px; padding:8px; border-radius:8px;
+    border:1px solid var(--rule); background:transparent; color:var(--ink-soft); cursor:pointer;
+  }
+  .color-pop .cp-default:hover{border-color:var(--ink-soft); color:var(--ink);}
+
   /* ---------- Class level toggle ---------- */
   .class-level{display:inline-flex; gap:5px;}
   .lvl-set{
@@ -858,6 +881,7 @@
       var course = MY_COURSES.find(function(c){ return c.subjectId===s.id; });
       var copy = Object.assign({}, s);
       copy.myLevel = course.level;
+      copy.color = course.color || s.color;   // per-class override, else catalog default
       return copy;
     });
     return sortSubjects(list);
@@ -1069,6 +1093,52 @@
     persist();
     renderNav();   // the sidebar shows the level under each class
     renderPage();
+  }
+
+  /* ---------------- Per-class colour ---------------- */
+  var COLOR_PRESETS = [
+    '#3F7D4C','#2C7A7B','#35507A','#2E6E8E','#6B7F3A','#B9862E',
+    '#A6512E','#C0392B','#7A3B4A','#6B4C7A','#6B4A32','#4A5568'
+  ];
+  function setClassColor(subjId, color){
+    var c = MY_COURSES.find(function(x){ return x.subjectId===subjId; });
+    if (!c) return;
+    if (color){ c.color = color; } else { delete c.color; }
+    persist();
+    renderNav();   // sidebar flag colour
+    renderPage();
+  }
+  function closeColorPicker(){
+    var pop = document.getElementById('colorPop');
+    if (pop){ pop.remove(); }
+    document.removeEventListener('pointerdown', colorOutsideClick);
+  }
+  function colorOutsideClick(e){
+    var pop = document.getElementById('colorPop');
+    if (pop && !pop.contains(e.target) && !e.target.closest('#classColorBtn')){ closeColorPicker(); }
+  }
+  function openColorPicker(subjId, anchor){
+    closeColorPicker();
+    var course = MY_COURSES.find(function(x){ return x.subjectId===subjId; });
+    var current = course && course.color;
+    var pop = document.createElement('div');
+    pop.className = 'color-pop'; pop.id = 'colorPop';
+    pop.innerHTML =
+      '<div class="cp-grid">' + COLOR_PRESETS.map(function(c){
+        return '<button class="cp-sw' + (current===c?' active':'') + '" type="button" data-color="' + c + '" style="background:' + c + '" title="' + c + '"></button>';
+      }).join('') + '</div>' +
+      '<button class="cp-default" type="button" data-color="">Use default colour</button>';
+    document.body.appendChild(pop);
+    // Position under the swatch, flipping above if it would overflow.
+    var r = anchor.getBoundingClientRect();
+    var left = Math.max(8, Math.min(r.left, window.innerWidth - pop.offsetWidth - 8));
+    var top = r.bottom + 8;
+    if (top + pop.offsetHeight > window.innerHeight - 8){ top = Math.max(8, r.top - pop.offsetHeight - 8); }
+    pop.style.left = left + 'px'; pop.style.top = top + 'px';
+    pop.querySelectorAll('[data-color]').forEach(function(b){
+      b.addEventListener('click', function(){ setClassColor(subjId, b.getAttribute('data-color') || null); closeColorPicker(); });
+    });
+    setTimeout(function(){ document.addEventListener('pointerdown', colorOutsideClick); }, 0);
   }
 
   /* ---------------- PDF files ---------------- */
@@ -1542,6 +1612,7 @@
       '<div class="page-header" style="--accent:' + accent + '">' +
         '<div><h2>' + s.name + '</h2><p class="kicker">' + s.short + ' · ' + s.myLevel + ' · Grade 11</p></div>' +
         '<div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">' +
+          '<button class="class-color" id="classColorBtn" type="button" title="Change class colour" style="background:' + accent + '"></button>' +
           '<div class="class-level" title="Your level for this class — saved automatically">' +
             '<button class="lvl-set' + (s.myLevel==='SL'?' active':'') + '" data-setlevel="SL" style="--accent:' + accent + '">SL</button>' +
             '<button class="lvl-set' + (s.myLevel==='HL'?' active':'') + '" data-setlevel="HL" style="--accent:' + accent + '">HL</button>' +
@@ -1693,6 +1764,12 @@
         setClassLevel(currentView, b.getAttribute('data-setlevel'));
       });
     });
+
+    // Class colour swatch — opens the colour picker
+    var colorBtn = document.getElementById('classColorBtn');
+    if (colorBtn){
+      colorBtn.addEventListener('click', function(){ openColorPicker(currentView, colorBtn); });
+    }
 
     // PDF files: upload into a specific section, open, delete
     document.querySelectorAll('.col-file').forEach(function(input){
