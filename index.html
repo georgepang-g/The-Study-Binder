@@ -343,6 +343,28 @@
     line-height:1; padding:2px 4px;
   }
   .del:hover{color:#a6512e;}
+  .card-btns{display:inline-flex; gap:1px; align-items:flex-start; flex-shrink:0;}
+  .edit-btn{
+    background:none; border:none; color:#b3ab9c; cursor:pointer; font-size:13px;
+    line-height:1; padding:2px 4px;
+  }
+  .edit-btn:hover{color:var(--accent, var(--ink));}
+
+  /* Inline entry-edit form */
+  .card.editing{padding:12px;}
+  .card .edit-title, .card .edit-body{
+    width:100%; font-family:inherit; padding:8px 9px; border:1px solid var(--rule);
+    border-radius:6px; background:#fffefb; color:var(--ink); margin-bottom:8px;
+  }
+  .card .edit-title{font-size:14px; font-weight:600;}
+  .card .edit-body{font-size:13px; resize:vertical; min-height:58px;}
+  html.theme-dark .card .edit-title, html.theme-dark .card .edit-body{background:#171C21;}
+  .card .edit-actions{display:flex; justify-content:flex-end; gap:8px;}
+  .card .edit-actions button{
+    padding:7px 14px; border-radius:6px; font-size:13px; cursor:pointer;
+    border:1px solid var(--rule); background:transparent; color:var(--ink);
+  }
+  .card .edit-actions .edit-save{background:var(--accent, var(--ink)); border-color:var(--accent, var(--ink)); color:#fff;}
 
   .task-row{display:flex; align-items:flex-start; gap:9px;}
   .task-row input[type=checkbox]{margin-top:3px; width:15px; height:15px; accent-color:var(--accent,#333); cursor:pointer;}
@@ -906,6 +928,7 @@
   var quickAddOpen = false;
   var searchQuery = '';
   var calMonth = null;   // Date pinned to the 1st of the displayed month (lazy-init)
+  var editingId = null;  // id of the entry currently being edited inline
 
   // Firestore caps a single document at ~1MB, so a PDF is base64-encoded and
   // split into chunk documents (binders/{uid}/files/{id}_c{n}). The metadata in
@@ -1444,6 +1467,21 @@
     renderPage();
   }
 
+  // Save an inline edit of an entry's title/details.
+  function saveEdit(id){
+    var e = ENTRIES.find(function(x){ return x.id===id; });
+    if (!e){ editingId = null; renderPage(); return; }
+    var titleEl = document.getElementById('editTitle');
+    var bodyEl = document.getElementById('editBody');
+    var title = titleEl ? titleEl.value.trim() : '';
+    if (!title){ if (titleEl){ titleEl.focus(); } return; }   // a title is required
+    e.title = title;
+    e.body = bodyEl ? bodyEl.value.trim() : '';
+    editingId = null;
+    saveData();
+    renderPage();
+  }
+
   /* ---------------- Nav ---------------- */
   function renderNav(){
     var ul = document.getElementById('spineNav');
@@ -1487,6 +1525,7 @@
     currentView = view;
     levelFilter = 'All';
     quickAddOpen = false;
+    editingId = null;
     document.querySelectorAll('#spineNav .tab').forEach(function(btn){
       btn.classList.toggle('active', btn.getAttribute('data-view')===view);
     });
@@ -1585,27 +1624,49 @@
     return (v==='notes' || v==='tasks' || v==='projects' || v==='exam') ? v : 'notes';
   }
 
+  // Edit (pencil) + delete (×) buttons shown on every entry card.
+  function cardBtns(id){
+    return '<span class="card-btns">' +
+      '<button class="edit-btn" data-edit="' + id + '" title="Edit" aria-label="Edit">✎</button>' +
+      '<button class="del" data-del="' + id + '" title="Remove" aria-label="Remove">×</button>' +
+    '</span>';
+  }
+  // Inline edit form (title + details), reused for every entry type.
+  function renderEditForm(e, accent){
+    return '<div class="card editing" style="--accent:' + accent + '">' +
+      '<input type="text" class="edit-title" id="editTitle" value="' + escapeHtml(e.title) + '" placeholder="Title" />' +
+      '<textarea class="edit-body" id="editBody" placeholder="Details (optional)">' + escapeHtml(e.body || '') + '</textarea>' +
+      '<div class="edit-actions">' +
+        '<button type="button" class="edit-cancel" data-editcancel="1">Cancel</button>' +
+        '<button type="button" class="edit-save" data-editsave="' + e.id + '" style="--accent:' + accent + '">Save</button>' +
+      '</div>' +
+    '</div>';
+  }
+
   function renderNoteCard(n, accent){
+    if (editingId === n.id) return renderEditForm(n, accent);
     return '<div class="card" style="--accent:' + accent + '">' +
-      '<div class="card-top"><h5>' + escapeHtml(n.title) + '</h5><button class="del" data-del="' + n.id + '" title="Remove">×</button></div>' +
+      '<div class="card-top"><h5>' + escapeHtml(n.title) + '</h5>' + cardBtns(n.id) + '</div>' +
       (n.body ? '<p>' + escapeHtml(n.body) + '</p>' : '') +
       '<div class="meta">' + n.level + ' · ' + fmtDate(n.createdAt) + '</div>' +
     '</div>';
   }
   function renderTaskCard(t, accent){
+    if (editingId === t.id) return renderEditForm(t, accent);
     return '<div class="card" style="--accent:' + accent + '">' +
       '<div class="card-top task-row' + (t.done?' done':'') + '">' +
         '<input type="checkbox" data-toggle="' + t.id + '" ' + (t.done?'checked':'') + '/>' +
         '<div style="flex:1"><h5>' + escapeHtml(t.title) + '</h5>' + (t.body ? '<p>'+escapeHtml(t.body)+'</p>' : '') + '</div>' +
-        '<button class="del" data-del="' + t.id + '" title="Remove">×</button>' +
+        cardBtns(t.id) +
       '</div>' +
       deadlineControl(t) +
       '<div class="meta">' + t.level + ' · ' + fmtDate(t.createdAt) + '</div>' +
     '</div>';
   }
   function renderProjectCard(p, accent){
+    if (editingId === p.id) return renderEditForm(p, accent);
     return '<div class="card" style="--accent:' + accent + '">' +
-      '<div class="card-top"><h5>' + escapeHtml(p.title) + '</h5><button class="del" data-del="' + p.id + '" title="Remove">×</button></div>' +
+      '<div class="card-top"><h5>' + escapeHtml(p.title) + '</h5>' + cardBtns(p.id) + '</div>' +
       (p.body ? '<p>' + escapeHtml(p.body) + '</p>' : '') +
       deadlineControl(p) +
       '<span class="status-pill" data-status="' + p.id + '" style="background:' + statusColor(p.status) + '">' + p.status + '</span>' +
@@ -1613,8 +1674,9 @@
     '</div>';
   }
   function renderExamCard(e, accent){
+    if (editingId === e.id) return renderEditForm(e, accent);
     return '<div class="card" style="--accent:' + accent + '">' +
-      '<div class="card-top"><h5>' + escapeHtml(e.title) + '</h5><button class="del" data-del="' + e.id + '" title="Remove">×</button></div>' +
+      '<div class="card-top"><h5>' + escapeHtml(e.title) + '</h5>' + cardBtns(e.id) + '</div>' +
       (e.body ? '<p>' + escapeHtml(e.body) + '</p>' : '') +
       deadlineControl(e) +
       '<div class="meta">' + e.level + ' · ' + fmtDate(e.createdAt) + '</div>' +
@@ -2093,6 +2155,21 @@
     document.querySelectorAll('[data-del]').forEach(function(btn){
       btn.addEventListener('click', function(){ deleteEntry(btn.getAttribute('data-del')); });
     });
+
+    // Inline edit: open, save, cancel
+    document.querySelectorAll('[data-edit]').forEach(function(btn){
+      btn.addEventListener('click', function(){ editingId = btn.getAttribute('data-edit'); quickAddOpen = false; renderPage(); });
+    });
+    document.querySelectorAll('[data-editsave]').forEach(function(btn){
+      btn.addEventListener('click', function(){ saveEdit(btn.getAttribute('data-editsave')); });
+    });
+    document.querySelectorAll('[data-editcancel]').forEach(function(btn){
+      btn.addEventListener('click', function(){ editingId = null; renderPage(); });
+    });
+    if (editingId){
+      var et = document.getElementById('editTitle');
+      if (et){ setTimeout(function(){ try{ et.focus(); et.setSelectionRange(et.value.length, et.value.length); }catch(e){} }, 0); }
+    }
 
     // Task checkboxes
     document.querySelectorAll('[data-toggle]').forEach(function(cb){
