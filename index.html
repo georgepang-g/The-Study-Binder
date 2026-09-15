@@ -363,7 +363,7 @@
     border:1px solid var(--rule); border-radius:5px; color:var(--ink); background:#fffefb;
     max-width:150px;
   }
-  html[data-theme="dark"] .deadline-edit .due-input{background:#171C21;}
+  html.theme-dark .deadline-edit .due-input{background:#171C21;}
   .deadline-edit .due-text{font-size:11.5px; color:var(--ink-soft);}
   .deadline-edit .due-text.none{font-style:italic;}
   .deadline-edit .due-text.overdue{color:#a6512e; font-weight:600;}
@@ -468,22 +468,41 @@
   .boot[hidden]{display:none;}
 
   /* ---------- Themes (default :root above is "Paper") ---------- */
+  /* Light palettes */
   html[data-theme="light"]{
     --page:#EEF1F4; --card:#FFFFFF; --ink:#1E2427; --ink-soft:#586067;
     --rule:#D8DDE3; --spine:#242B32;
   }
+  html[data-theme="ocean"]{
+    --page:#EAF2F7; --card:#FFFFFF; --ink:#16303B; --ink-soft:#557080;
+    --rule:#CBDDE7; --spine:#123A4A;
+  }
+  html[data-theme="rose"]{
+    --page:#FBEFF1; --card:#FFFFFF; --ink:#3A2830; --ink-soft:#7C5B65;
+    --rule:#EED3D9; --spine:#5A2A3A;
+  }
+  /* Dark palettes */
   html[data-theme="dark"]{
     --page:#15181B; --card:#1E2429; --ink:#E9E9E3; --ink-soft:#9AA2A8;
     --rule:#2F363C; --spine:#10151A; --spine-text:#EDEDE6; --spine-text-dim:#8C959C;
   }
-  html[data-theme="dark"] .qa-row input,
-  html[data-theme="dark"] .qa-row select,
-  html[data-theme="dark"] .qa-row textarea{ background:#171C21; color:var(--ink); }
+  html[data-theme="forest"]{
+    --page:#0F140F; --card:#18201A; --ink:#E6ECE3; --ink-soft:#9DAE9C;
+    --rule:#293528; --spine:#0B120D; --spine-text:#EAEFE6; --spine-text-dim:#8DA08C;
+  }
+  html[data-theme="grape"]{
+    --page:#15111C; --card:#1E1827; --ink:#EAE5F1; --ink-soft:#A99FB6;
+    --rule:#312A3D; --spine:#100C17; --spine-text:#EBE7F2; --spine-text-dim:#A096AE;
+  }
+  /* Component tweaks shared by every dark palette (applyTheme adds .theme-dark). */
+  html.theme-dark .qa-row input,
+  html.theme-dark .qa-row select,
+  html.theme-dark .qa-row textarea{ background:#171C21; color:var(--ink); }
   /* Only recolor the *inactive* toggle buttons, so active states keep their fill. */
-  html[data-theme="dark"] .qa-actions button,
-  html[data-theme="dark"] .course-level button:not(.active),
-  html[data-theme="dark"] .opt-btn:not(.active),
-  html[data-theme="dark"] .lvl-set:not(.active){ background:#171C21; color:var(--ink-soft); }
+  html.theme-dark .qa-actions button,
+  html.theme-dark .course-level button:not(.active),
+  html.theme-dark .opt-btn:not(.active),
+  html.theme-dark .lvl-set:not(.active){ background:#171C21; color:var(--ink-soft); }
 
   /* ---------- Class level toggle ---------- */
   .class-level{display:inline-flex; gap:5px;}
@@ -554,6 +573,7 @@
     animation:spPop .28s cubic-bezier(.2,.8,.25,1);
     touch-action:none;   /* the card itself never scrolls the page */
   }
+  .sp-overlay[hidden]{display:none;}   /* display:flex above would otherwise override the hidden attribute */
   @keyframes spPop{ from{ opacity:0; transform:translateY(-8px) scale(.96); } to{ opacity:1; transform:none; } }
   /* On phones the nav is a bar across the top, so drop the overlay to the bottom. */
   @media (max-width: 760px){
@@ -853,18 +873,22 @@
   }
 
   /* ---------------- Settings & theme ---------------- */
+  var THEME_IDS = ['paper','light','ocean','rose','dark','forest','grape'];
+  var DARK_THEMES = ['dark','forest','grape'];
   function normalizeSettings(s){
     s = s || {};
     return {
-      theme:  (s.theme==='dark' || s.theme==='light' || s.theme==='paper') ? s.theme : 'paper',
+      theme:  (THEME_IDS.indexOf(s.theme) !== -1) ? s.theme : 'paper',
       sortBy: (s.sortBy==='az' || s.sortBy==='deadline' || s.sortBy==='catalog') ? s.sortBy : 'catalog',
       hideCompleted: !!s.hideCompleted
     };
   }
   function applyTheme(){
     var t = (SETTINGS && SETTINGS.theme) || 'paper';
-    if (t === 'paper'){ document.documentElement.removeAttribute('data-theme'); }
-    else { document.documentElement.setAttribute('data-theme', t); }
+    var root = document.documentElement;
+    if (t === 'paper'){ root.removeAttribute('data-theme'); }
+    else { root.setAttribute('data-theme', t); }
+    root.classList.toggle('theme-dark', DARK_THEMES.indexOf(t) !== -1);
   }
 
   /* ---------------- Class sorting ---------------- */
@@ -1532,9 +1556,13 @@
 
   function renderSettings(){
     var themes = [
-      { id:'paper', name:'Paper',  sw:'#FCFBF7' },
-      { id:'light', name:'Light',  sw:'#EEF1F4' },
-      { id:'dark',  name:'Dark',   sw:'#15181B' }
+      { id:'paper',  name:'Paper',  sw:'#FCFBF7' },
+      { id:'light',  name:'Light',  sw:'#EEF1F4' },
+      { id:'ocean',  name:'Ocean',  sw:'#BFE0EF' },
+      { id:'rose',   name:'Rosé',   sw:'#F3D9DF' },
+      { id:'dark',   name:'Dark',   sw:'#15181B' },
+      { id:'forest', name:'Forest', sw:'#17301C' },
+      { id:'grape',  name:'Grape',  sw:'#221A30' }
     ];
     var sorts = [
       { id:'catalog',  name:'Standard order' },
