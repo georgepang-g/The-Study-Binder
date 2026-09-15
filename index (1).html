@@ -1,0 +1,1380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>The Binder — IB Grade 11</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --spine:#202B33;
+    --spine-text:#EDEDE6;
+    --spine-text-dim:#9BA6AC;
+    --page:#FCFBF7;
+    --card:#FFFFFF;
+    --ink:#23282B;
+    --ink-soft:#5C6368;
+    --rule:#DFDACB;
+    --focus:#20262B;
+
+    --business:#B9862E;
+    --mathAA:#1F6F6B;
+    --chemistry:#3F7D4C;
+    --physics:#35507A;
+    --english:#7A3B4A;
+    --spanishB:#A6512E;
+    --french:#6B4C7A;
+    --history:#6B4A32;
+    --geography:#2E6E8E;
+    --biology:#6B7F3A;
+
+    --done:#3F7D4C;
+    --progress:#B9862E;
+    --notstarted:#8A8378;
+  }
+
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    font-family:'Inter',system-ui,sans-serif;
+    color:var(--ink);
+    background:var(--page);
+    -webkit-font-smoothing:antialiased;
+  }
+  h1,h2,h3{font-family:'Fraunces',Georgia,serif;margin:0;}
+  button{font-family:inherit;}
+  ::selection{background:#20262B; color:#fff;}
+
+  .app{
+    display:flex;
+    min-height:100vh;
+  }
+
+  /* ---------- Spine (nav) ---------- */
+  .spine{
+    width:236px;
+    flex-shrink:0;
+    background:var(--spine);
+    color:var(--spine-text);
+    display:flex;
+    flex-direction:column;
+    padding:22px 0 16px;
+    position:sticky;
+    top:0;
+    height:100vh;
+  }
+  .spine-brand{
+    padding:0 20px 18px;
+    border-bottom:1px solid rgba(255,255,255,0.12);
+    margin-bottom:6px;
+  }
+  .spine-brand h1{
+    font-size:22px;
+    font-weight:600;
+    letter-spacing:0.2px;
+    color:#fff;
+  }
+  .spine-brand p{
+    margin:4px 0 0;
+    font-size:12.5px;
+    color:var(--spine-text-dim);
+  }
+  .spine-nav{
+    list-style:none;
+    margin:0;
+    padding:8px 10px;
+    flex:1;
+    overflow-y:auto;
+  }
+  .spine-nav li{margin-bottom:2px;}
+  .tab{
+    width:100%;
+    display:flex;
+    align-items:center;
+    gap:10px;
+    background:transparent;
+    border:none;
+    color:var(--spine-text);
+    padding:9px 10px;
+    border-radius:6px;
+    cursor:pointer;
+    font-size:14.5px;
+    text-align:left;
+    opacity:0;
+    transform:translateX(-14px);
+    animation:tabIn .38s ease forwards;
+    animation-delay:calc(var(--i) * 55ms);
+  }
+  @keyframes tabIn{ to{ opacity:1; transform:translateX(0); } }
+  .tab:hover{background:rgba(255,255,255,0.08);}
+  .tab.active{background:rgba(255,255,255,0.14);}
+  .flag{
+    width:9px;height:9px;border-radius:2px;flex-shrink:0;
+    background:var(--flag-color, #8A8378);
+  }
+  .tab-name{flex:1; line-height:1.25;}
+  .tab-sub{display:block; font-size:11px; color:var(--spine-text-dim);}
+  .manage-tab{border-top:1px solid rgba(255,255,255,0.14); margin-top:6px; padding-top:12px;}
+
+  .spine-foot{
+    padding:14px 20px 4px;
+    border-top:1px solid rgba(255,255,255,0.12);
+    font-size:12px;
+    color:var(--spine-text-dim);
+    line-height:1.5;
+  }
+  .spine-foot .who{
+    display:block;
+    color:var(--spine-text);
+    font-size:12.5px;
+    margin-bottom:2px;
+    word-break:break-all;
+  }
+  .spine-foot .sync-note{display:block; margin-bottom:8px;}
+  .spine-foot button{
+    margin-top:8px;
+    width:100%;
+    background:rgba(255,255,255,0.1);
+    color:#fff;
+    border:1px solid rgba(255,255,255,0.18);
+    padding:7px 8px;
+    border-radius:6px;
+    font-size:12.5px;
+    cursor:pointer;
+  }
+  .spine-foot button:hover{background:rgba(255,255,255,0.18);}
+  .spine-foot button.ghost{background:transparent;}
+
+  /* ---------- Page (main content) ---------- */
+  .page-wrap{
+    flex:1;
+    min-width:0;
+    background-image: radial-gradient(circle at 22px 0, var(--page) 6px, var(--rule) 7px, transparent 7.5px);
+    background-size:100% 88px;
+    background-repeat:repeat-y;
+    background-position: 0 20px;
+  }
+  .page{
+    max-width:1080px;
+    margin:0 auto;
+    padding:38px 40px 60px 64px;
+  }
+
+  .page-header{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-end;
+    flex-wrap:wrap;
+    gap:14px;
+    margin-bottom:22px;
+    padding-bottom:16px;
+    border-bottom:2px solid var(--accent, var(--ink));
+  }
+  .page-header h2{
+    font-size:30px;
+    font-weight:600;
+    color:var(--ink);
+  }
+  .page-header .kicker{
+    color:var(--ink-soft);
+    font-size:13.5px;
+    margin-top:4px;
+  }
+  .level-chips{display:flex; gap:6px;}
+  .chip{
+    border:1px solid var(--rule);
+    background:#fff;
+    padding:6px 13px;
+    border-radius:20px;
+    font-size:13px;
+    cursor:pointer;
+    color:var(--ink-soft);
+  }
+  .chip.active{
+    background:var(--accent, var(--ink));
+    border-color:var(--accent, var(--ink));
+    color:#fff;
+  }
+
+  .add-toggle{
+    background:var(--accent, var(--ink));
+    color:#fff;
+    border:none;
+    padding:9px 16px;
+    border-radius:7px;
+    font-size:13.5px;
+    font-weight:500;
+    cursor:pointer;
+  }
+  .add-toggle:hover{opacity:0.92;}
+
+  .quick-add{
+    background:var(--card);
+    border:1px solid var(--rule);
+    border-radius:10px;
+    padding:18px;
+    margin-bottom:26px;
+    display:none;
+  }
+  .quick-add.open{display:block;}
+  .qa-row{display:flex; gap:10px; flex-wrap:wrap; margin-bottom:10px;}
+  .qa-row label{
+    display:flex; flex-direction:column; gap:4px;
+    font-size:12px; color:var(--ink-soft); flex:1; min-width:140px;
+  }
+  .qa-row input, .qa-row select, .qa-row textarea{
+    font-family:inherit;
+    font-size:14px;
+    padding:8px 9px;
+    border:1px solid var(--rule);
+    border-radius:6px;
+    color:var(--ink);
+    background:#fffefb;
+  }
+  .qa-row textarea{resize:vertical; min-height:60px;}
+  .qa-actions{display:flex; justify-content:flex-end; gap:8px;}
+  .qa-actions button{
+    padding:8px 15px;
+    border-radius:6px;
+    font-size:13.5px;
+    cursor:pointer;
+    border:1px solid var(--rule);
+    background:#fff;
+    color:var(--ink);
+  }
+  .qa-actions .primary{
+    background:var(--accent, var(--ink));
+    border-color:var(--accent, var(--ink));
+    color:#fff;
+  }
+
+  /* Overview */
+  .tiles{
+    display:grid;
+    grid-template-columns:repeat(auto-fit, minmax(220px,1fr));
+    gap:16px;
+    margin-bottom:30px;
+  }
+  .tile{
+    background:var(--card);
+    border:1px solid var(--rule);
+    border-top:4px solid var(--tile-color, #999);
+    border-radius:9px;
+    padding:16px 16px 14px;
+    cursor:pointer;
+  }
+  .tile:hover{box-shadow:0 3px 10px rgba(0,0,0,0.06);}
+  .tile h3{font-size:16.5px; font-weight:600; margin-bottom:2px;}
+  .tile .lv{font-size:11.5px; color:var(--ink-soft); margin-bottom:10px; display:block;}
+  .tile .stats{display:flex; gap:14px; font-size:12.5px; color:var(--ink-soft);}
+  .tile .stats b{color:var(--ink); font-size:14px; display:block; font-weight:600;}
+  .tile .deadline{margin-top:10px; font-size:12px; color:var(--tile-color,#999); font-weight:500;}
+
+  .section-title{
+    font-size:15px;
+    font-weight:600;
+    margin-bottom:12px;
+    color:var(--ink);
+  }
+  .deadline-list{list-style:none; margin:0 0 10px; padding:0;}
+  .deadline-list li{
+    display:flex; justify-content:space-between; gap:10px;
+    padding:10px 0;
+    border-bottom:1px solid var(--rule);
+    font-size:14px;
+  }
+  .deadline-list .d-when{font-size:12.5px; color:var(--ink-soft);}
+
+  .empty{
+    color:var(--ink-soft);
+    font-size:13.5px;
+    padding:16px 0;
+    line-height:1.6;
+  }
+
+  /* Subject columns */
+  .columns{
+    display:grid;
+    grid-template-columns:1fr 1fr 1fr;
+    gap:20px;
+  }
+  .col-head{
+    display:flex; justify-content:space-between; align-items:baseline;
+    margin-bottom:12px;
+  }
+  .col-head h4{font-size:14px; font-weight:600; text-transform:none;}
+  .col-head span{font-size:12px; color:var(--ink-soft);}
+
+  .card{
+    background:var(--card);
+    border:1px solid var(--rule);
+    border-left:3px solid var(--accent, #999);
+    border-radius:7px;
+    padding:12px 12px 10px;
+    margin-bottom:10px;
+    position:relative;
+  }
+  .card .card-top{display:flex; justify-content:space-between; gap:8px; align-items:flex-start;}
+  .card h5{font-size:14px; font-weight:600; margin:0 0 4px;}
+  .card p{font-size:13px; color:var(--ink-soft); line-height:1.55; margin:0; white-space:pre-wrap;}
+  .card .meta{font-size:11px; color:#9a9488; margin-top:8px;}
+  .del{
+    background:none; border:none; color:#b3ab9c; cursor:pointer; font-size:15px;
+    line-height:1; padding:2px 4px;
+  }
+  .del:hover{color:#a6512e;}
+
+  .task-row{display:flex; align-items:flex-start; gap:9px;}
+  .task-row input[type=checkbox]{margin-top:3px; width:15px; height:15px; accent-color:var(--accent,#333); cursor:pointer;}
+  .task-row.done h5{text-decoration:line-through; color:#9a9488;}
+  .task-row.done p{text-decoration:line-through;}
+
+  .status-pill{
+    display:inline-block;
+    font-size:11px;
+    padding:3px 9px;
+    border-radius:20px;
+    color:#fff;
+    cursor:pointer;
+    margin-top:6px;
+    font-weight:500;
+  }
+  .due{font-size:11.5px; color:var(--ink-soft); margin-top:6px;}
+  .due.overdue{color:#a6512e; font-weight:600;}
+
+  /* Course setup / picker */
+  .setup-intro{max-width:560px; color:var(--ink-soft); font-size:14px; line-height:1.6; margin-bottom:22px;}
+  .course-grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fill, minmax(230px,1fr));
+    gap:12px;
+    margin-bottom:24px;
+  }
+  .course-card{
+    border:1px solid var(--rule);
+    background:var(--card);
+    border-radius:9px;
+    padding:13px 14px;
+    display:flex;
+    flex-direction:column;
+    gap:8px;
+  }
+  .course-card.selected{border-color:var(--cc-color,#999); box-shadow:0 0 0 1px var(--cc-color,#999) inset;}
+  .course-check{display:flex; align-items:center; gap:9px; cursor:pointer; font-size:14px; font-weight:500;}
+  .course-check input{width:16px; height:16px; accent-color:var(--cc-color,#333); cursor:pointer;}
+  .course-flag{width:9px; height:9px; border-radius:2px; background:var(--cc-color,#999); flex-shrink:0;}
+  .course-level{display:flex; gap:6px; padding-left:25px;}
+  .course-level button{
+    flex:1; padding:5px 0; font-size:12px; border-radius:5px; cursor:pointer;
+    border:1px solid var(--rule); background:#fff; color:var(--ink-soft);
+  }
+  .course-level button.active{background:var(--cc-color,#333); border-color:var(--cc-color,#333); color:#fff;}
+  .course-level{display:none;}
+  .course-card.selected .course-level{display:flex;}
+  .setup-actions{display:flex; gap:10px; align-items:center;}
+  .setup-save{
+    background:#20262B; color:#fff; border:none; padding:11px 22px; border-radius:7px;
+    font-size:14px; font-weight:500; cursor:pointer;
+  }
+  .setup-save:hover{opacity:0.92;}
+  .setup-note{font-size:12.5px; color:var(--ink-soft);}
+
+  /* ---------- Auth gate (sign in / sign up) ---------- */
+  .gate{
+    position:fixed; inset:0;
+    background:var(--spine);
+    color:var(--spine-text);
+    display:flex; align-items:center; justify-content:center;
+    padding:24px;
+    z-index:50;
+  }
+  .gate[hidden]{display:none;}
+  .gate-card{
+    width:100%; max-width:380px;
+    background:#fff; color:var(--ink);
+    border-radius:14px;
+    padding:30px 28px 26px;
+    box-shadow:0 20px 60px rgba(0,0,0,0.35);
+  }
+  .gate-card h1{font-size:26px; font-weight:600; margin-bottom:4px;}
+  .gate-card .sub{color:var(--ink-soft); font-size:13.5px; margin-bottom:20px; line-height:1.5;}
+  .gate-field{display:flex; flex-direction:column; gap:5px; margin-bottom:12px;}
+  .gate-field label{font-size:12px; color:var(--ink-soft);}
+  .gate-field input{
+    font-family:inherit; font-size:15px; padding:11px 12px;
+    border:1px solid var(--rule); border-radius:8px; color:var(--ink); background:#fffefb;
+  }
+  .gate-primary{
+    width:100%; background:#20262B; color:#fff; border:none;
+    padding:12px; border-radius:8px; font-size:15px; font-weight:500; cursor:pointer; margin-top:4px;
+  }
+  .gate-primary:hover{opacity:0.92;}
+  .gate-primary:disabled{opacity:0.55; cursor:default;}
+  .gate-google{
+    width:100%; background:#fff; color:var(--ink); border:1px solid var(--rule);
+    padding:11px; border-radius:8px; font-size:14.5px; font-weight:500; cursor:pointer;
+    display:flex; align-items:center; justify-content:center; gap:9px; margin-top:10px;
+  }
+  .gate-google:hover{background:#f7f5ef;}
+  .gate-google svg{width:17px; height:17px;}
+  .gate-or{display:flex; align-items:center; gap:10px; color:var(--ink-soft); font-size:12px; margin:16px 0;}
+  .gate-or::before,.gate-or::after{content:""; flex:1; height:1px; background:var(--rule);}
+  .gate-toggle{margin-top:16px; font-size:13px; color:var(--ink-soft); text-align:center;}
+  .gate-toggle button{background:none; border:none; color:#35507A; cursor:pointer; font-size:13px; font-weight:600; padding:0;}
+  .gate-msg{margin-top:14px; font-size:13px; min-height:18px; line-height:1.4;}
+  .gate-msg.err{color:#a6512e;}
+  .gate-msg.ok{color:var(--done);}
+  .gate-setup{
+    margin-top:18px; font-size:12px; color:var(--ink-soft);
+    background:#f7f5ef; border:1px solid var(--rule); border-radius:8px; padding:12px 13px; line-height:1.55;
+  }
+  .gate-setup code{font-family:ui-monospace,Menlo,monospace; font-size:11.5px;}
+
+  .boot{
+    position:fixed; inset:0; display:flex; align-items:center; justify-content:center;
+    background:var(--page); color:var(--ink-soft); font-size:14px; z-index:60;
+  }
+  .boot[hidden]{display:none;}
+
+  @media (max-width: 900px){
+    .columns{grid-template-columns:1fr;}
+  }
+  @media (max-width: 760px){
+    .app{flex-direction:column;}
+    .spine{
+      width:100%; height:auto; position:relative;
+      flex-direction:row; align-items:center; padding:14px 12px; gap:14px;
+      overflow-x:auto;
+    }
+    .spine-brand{border:none; padding:0 10px 0 0; margin:0; white-space:nowrap;}
+    .spine-nav{display:flex; padding:0; flex:none;}
+    .spine-nav li{margin:0 2px;}
+    .tab{white-space:nowrap;}
+    .tab-sub{display:none;}
+    .manage-tab{border-top:none; border-left:1px solid rgba(255,255,255,0.14); margin-top:0; padding-top:9px; margin-left:6px; padding-left:14px;}
+    .spine-foot{display:none;}
+    .page{padding:26px 18px 40px 40px;}
+    .page-header{align-items:flex-start;}
+  }
+</style>
+</head>
+<body>
+
+<!-- Loading splash while we check who's signed in -->
+<div class="boot" id="boot">Loading your binder…</div>
+
+<!-- Sign in / create account -->
+<div class="gate" id="authGate" hidden>
+  <div class="gate-card">
+    <h1>The Binder</h1>
+    <p class="sub" id="gateSub">Sign in to open your study binder. It syncs across your phone, iPad, and computer automatically.</p>
+
+    <button class="gate-google" id="googleBtn" type="button">
+      <svg viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+      Continue with Google
+    </button>
+
+    <div class="gate-or">or</div>
+
+    <div class="gate-field">
+      <label for="gateEmail">Email</label>
+      <input id="gateEmail" type="email" autocomplete="email" placeholder="you@example.com" />
+    </div>
+    <div class="gate-field">
+      <label for="gatePassword">Password</label>
+      <input id="gatePassword" type="password" autocomplete="current-password" placeholder="At least 6 characters" />
+    </div>
+    <button class="gate-primary" id="emailBtn" type="button">Sign in</button>
+
+    <div class="gate-toggle" id="gateToggle">
+      New here? <button type="button" id="toggleModeBtn">Create an account</button>
+    </div>
+
+    <div class="gate-msg" id="gateMsg"></div>
+
+    <div class="gate-setup" id="gateSetup" hidden>
+      <strong>Setup needed:</strong> paste your Firebase project settings into the
+      <code>FIREBASE_CONFIG</code> block near the bottom of <code>index.html</code>.
+      See <code>README.md</code> for the 5-minute walkthrough.
+    </div>
+  </div>
+</div>
+
+<div class="app" id="app" hidden>
+  <nav class="spine">
+    <div class="spine-brand">
+      <h1>The Binder</h1>
+      <p>IB Diploma · Grade 11</p>
+    </div>
+    <ul class="spine-nav" id="spineNav"></ul>
+    <div class="spine-foot">
+      <span class="who" id="whoami"></span>
+      <span class="sync-note">Synced to your account across all your devices.</span>
+      <button id="exportBtn" type="button">Download study guide (.txt)</button>
+      <button id="signOutBtn" class="ghost" type="button">Sign out</button>
+    </div>
+  </nav>
+  <div class="page-wrap">
+    <div class="page" id="page"></div>
+  </div>
+</div>
+
+<script type="module">
+  /* ============================================================
+     1) FIREBASE CONFIG  —  PASTE YOUR OWN VALUES HERE
+     ------------------------------------------------------------
+     Create a free project at https://console.firebase.google.com
+     then Project settings → "Your apps" → Web app → copy the
+     firebaseConfig object and replace the placeholders below.
+     Full step-by-step is in README.md.
+     ============================================================ */
+  const FIREBASE_CONFIG = {
+    apiKey:            "PASTE_API_KEY",
+    authDomain:        "PASTE_PROJECT.firebaseapp.com",
+    projectId:         "PASTE_PROJECT_ID",
+    storageBucket:     "PASTE_PROJECT.appspot.com",
+    messagingSenderId: "PASTE_SENDER_ID",
+    appId:             "PASTE_APP_ID"
+  };
+
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
+  import {
+    getAuth, onAuthStateChanged, signInWithEmailAndPassword,
+    createUserWithEmailAndPassword, signOut, GoogleAuthProvider, signInWithPopup, setPersistence, browserLocalPersistence
+  } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
+  import {
+    getFirestore, doc, onSnapshot, setDoc, serverTimestamp
+  } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
+
+  "use strict";
+
+  var CATALOG = [
+    { id:'english',   name:'English A: Lang & Lit',     short:'English',   color:'var(--english)'   },
+    { id:'spanishB',  name:'Spanish B',                 short:'Spanish',   color:'var(--spanishB)'  },
+    { id:'french',    name:'French B',                  short:'French',    color:'var(--french)'    },
+    { id:'business',  name:'Business Management',       short:'Business',  color:'var(--business)'  },
+    { id:'history',   name:'History',                   short:'History',   color:'var(--history)'   },
+    { id:'geography', name:'Geography',                 short:'Geography', color:'var(--geography)' },
+    { id:'biology',   name:'Biology',                   short:'Biology',   color:'var(--biology)'   },
+    { id:'chemistry', name:'Chemistry',                 short:'Chemistry', color:'var(--chemistry)' },
+    { id:'physics',   name:'Physics',                   short:'Physics',   color:'var(--physics)'   },
+    { id:'mathAA',    name:'Mathematics: Analysis & Approaches', short:'Math AA', color:'var(--mathAA)' }
+  ];
+
+  var ENTRIES = [];
+  var DISMISSED = [];
+  var MY_COURSES = [];      // [{ subjectId, level }] — the person's actual course list
+  var currentView = 'overview';
+  var levelFilter = 'All';
+  var quickAddOpen = false;
+
+  // Firebase handles
+  var auth = null, db = null, currentUser = null;
+  var binderRef = null, unsubscribeBinder = null;
+  var firstSnapshot = true;
+  var suppressNextSave = false; // guard against echoing a remote change back
+
+  function configLooksReal(){
+    return FIREBASE_CONFIG.apiKey &&
+           FIREBASE_CONFIG.apiKey.indexOf('PASTE_') !== 0 &&
+           FIREBASE_CONFIG.projectId &&
+           FIREBASE_CONFIG.projectId.indexOf('PASTE_') !== 0;
+  }
+
+  function uid(prefix){
+    return prefix + '-' + Date.now() + '-' + Math.random().toString(36).slice(2,7);
+  }
+
+  function subjectById(id){
+    for (var i=0;i<CATALOG.length;i++){ if (CATALOG[i].id===id) return CATALOG[i]; }
+    return null;
+  }
+
+  // Catalog subjects the person is actually taking, in catalog order,
+  // each annotated with the level (SL/HL) they chose for it.
+  function activeSubjects(){
+    return CATALOG.filter(function(s){
+      return MY_COURSES.some(function(c){ return c.subjectId===s.id; });
+    }).map(function(s){
+      var course = MY_COURSES.find(function(c){ return c.subjectId===s.id; });
+      var copy = Object.assign({}, s);
+      copy.myLevel = course.level;
+      return copy;
+    });
+  }
+
+  function isSubjectActive(id){
+    return MY_COURSES.some(function(c){ return c.subjectId===id; });
+  }
+
+  // For a subject with no saved course entry yet, guess the level the
+  // person most likely uses from any existing notes/tasks/projects already
+  // filed under it, so first-time setup starts pre-filled rather than blank.
+  function inferLevelForSubject(subjectId){
+    var counts = { SL:0, HL:0 };
+    ENTRIES.forEach(function(e){
+      if (e.subject===subjectId && (e.level==='SL' || e.level==='HL')){ counts[e.level]++; }
+    });
+    return counts.HL > counts.SL ? 'HL' : 'SL';
+  }
+
+  /* ---------------- Cloud persistence (Firestore) ---------------- */
+  // Every user gets one document at binders/{uid}. Security rules make it
+  // readable/writable only by that signed-in user, so each person has their
+  // own private binder that follows them to every device.
+  async function persist(){
+    if (!binderRef) return;
+    try{
+      await setDoc(binderRef, {
+        entries: ENTRIES,
+        dismissed: DISMISSED,
+        courses: MY_COURSES,
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+    }catch(e){
+      console.error('Could not save binder to the cloud', e);
+    }
+  }
+
+  // Original code called saveData() (entries + dismissed) and saveCourses()
+  // (course list) separately. Both now write the whole binder document.
+  function saveData(){ return persist(); }
+  function saveCourses(){ return persist(); }
+
+  function subscribeBinder(){
+    binderRef = doc(db, 'binders', currentUser.uid);
+    firstSnapshot = true;
+    if (unsubscribeBinder){ unsubscribeBinder(); }
+    unsubscribeBinder = onSnapshot(binderRef, function(snap){
+      var fromRemote = !snap.metadata.hasPendingWrites; // false = our own optimistic write
+
+      if (snap.exists()){
+        var d = snap.data() || {};
+        ENTRIES   = Array.isArray(d.entries)   ? d.entries   : [];
+        DISMISSED = Array.isArray(d.dismissed) ? d.dismissed : [];
+        MY_COURSES= Array.isArray(d.courses)   ? d.courses   : [];
+      } else {
+        ENTRIES = []; DISMISSED = []; MY_COURSES = [];
+      }
+
+      if (firstSnapshot){
+        firstSnapshot = false;
+        chooseInitialView();
+        renderNav();
+        renderPage();
+      } else if (fromRemote){
+        // A change arrived from another device — refresh the screen.
+        renderNav();
+        renderPage();
+      }
+    }, function(err){
+      console.error('Sync error', err);
+      document.getElementById('page').innerHTML =
+        '<div class="empty">Could not reach the cloud. Check your connection and refresh. ' +
+        'If this is a fresh setup, confirm your Firestore security rules allow the signed-in user.</div>';
+    });
+  }
+
+  // Decide what to show right after the binder loads for the first time.
+  function chooseInitialView(){
+    if (MY_COURSES.length){
+      currentView = 'overview';
+      return;
+    }
+    // No course list yet. If entries already exist (e.g. imported binder),
+    // carry those subjects over automatically instead of making the person
+    // redo work; otherwise show the course picker for a true first run.
+    var inferredIds = [];
+    ENTRIES.forEach(function(e){
+      if (subjectById(e.subject) && inferredIds.indexOf(e.subject) === -1){
+        inferredIds.push(e.subject);
+      }
+    });
+    if (inferredIds.length){
+      MY_COURSES = inferredIds.map(function(id){ return { subjectId:id, level: inferLevelForSubject(id) }; });
+      currentView = 'overview';
+      persist();
+    } else {
+      currentView = 'courseSetup';
+    }
+  }
+
+  function addEntry(entry){
+    entry.id = uid('user');
+    entry.createdAt = Date.now();
+    ENTRIES.push(entry);
+    saveData();
+  }
+
+  function deleteEntry(id){
+    var entry = ENTRIES.find(function(e){ return e.id===id; });
+    ENTRIES = ENTRIES.filter(function(e){ return e.id!==id; });
+    if (entry && entry.origin === 'seed'){ DISMISSED.push(id); }
+    saveData();
+    renderPage();
+  }
+
+  function toggleTaskDone(id){
+    var entry = ENTRIES.find(function(e){ return e.id===id; });
+    if (entry){ entry.done = !entry.done; saveData(); renderPage(); }
+  }
+
+  var STATUS_CYCLE = ['Not started','In progress','Done'];
+  function cycleStatus(id){
+    var entry = ENTRIES.find(function(e){ return e.id===id; });
+    if (!entry) return;
+    var idx = STATUS_CYCLE.indexOf(entry.status);
+    entry.status = STATUS_CYCLE[(idx+1) % STATUS_CYCLE.length];
+    saveData();
+    renderPage();
+  }
+
+  function statusColor(status){
+    if (status==='Done') return 'var(--done)';
+    if (status==='In progress') return 'var(--progress)';
+    return 'var(--notstarted)';
+  }
+
+  function fmtDate(ts){
+    var d = new Date(ts);
+    return d.toLocaleDateString(undefined, { month:'short', day:'numeric' });
+  }
+
+  function daysUntil(dateStr){
+    if (!dateStr) return null;
+    var due = new Date(dateStr + 'T00:00:00');
+    var now = new Date();
+    now.setHours(0,0,0,0);
+    return Math.round((due - now) / 86400000);
+  }
+
+  function dueLabel(dateStr){
+    var n = daysUntil(dateStr);
+    if (n===null) return '';
+    var when = new Date(dateStr + 'T00:00:00').toLocaleDateString(undefined,{month:'short', day:'numeric'});
+    if (n < 0) return 'Due ' + when + ' · overdue';
+    if (n === 0) return 'Due ' + when + ' · today';
+    if (n === 1) return 'Due ' + when + ' · tomorrow';
+    return 'Due ' + when + ' · in ' + n + ' days';
+  }
+
+  /* ---------------- Nav ---------------- */
+  function renderNav(){
+    var ul = document.getElementById('spineNav');
+    var html = '';
+    html += navItem('overview', 'Overview', 'All courses', '#8A8378', 0);
+    var subs = activeSubjects();
+    subs.forEach(function(s, i){
+      html += navItem(s.id, s.short, s.myLevel, s.color, i+1);
+    });
+    html += '<li><button class="tab manage-tab' + (currentView==='courseSetup'?' active':'') + '" id="navManageCourses" style="--i:' + (subs.length+1) + '">' +
+      '<span class="flag" style="--flag-color:#8A8378"></span>' +
+      '<span class="tab-name">Manage courses<span class="tab-sub">Add or edit</span></span>' +
+      '</button></li>';
+    ul.innerHTML = html;
+
+    ul.querySelectorAll('.tab[data-view]').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        setView(btn.getAttribute('data-view'));
+      });
+    });
+    var manageBtn = document.getElementById('navManageCourses');
+    if (manageBtn){ manageBtn.addEventListener('click', openCourseSetup); }
+  }
+
+  function navItem(id, name, sub, color, i){
+    return '<li><button class="tab' + (currentView===id?' active':'') + '" data-view="' + id + '" style="--i:' + i + '">' +
+      '<span class="flag" style="--flag-color:' + color + '"></span>' +
+      '<span class="tab-name">' + name + '<span class="tab-sub">' + sub + '</span></span>' +
+      '</button></li>';
+  }
+
+  function setView(view){
+    currentView = view;
+    levelFilter = 'All';
+    quickAddOpen = false;
+    document.querySelectorAll('#spineNav .tab').forEach(function(btn){
+      btn.classList.toggle('active', btn.getAttribute('data-view')===view);
+    });
+    renderPage();
+  }
+
+  /* ---------------- Page ---------------- */
+  function renderPage(){
+    var page = document.getElementById('page');
+    if (currentView === 'overview'){
+      page.innerHTML = renderOverview();
+    } else if (currentView === 'courseSetup'){
+      page.innerHTML = renderCourseSetup();
+    } else {
+      page.innerHTML = renderSubject(currentView);
+    }
+    wirePageEvents();
+  }
+
+  function renderOverview(){
+    var mySubjects = activeSubjects();
+
+    if (!mySubjects.length){
+      return (
+        '<div class="page-header" style="--accent:#20262B">' +
+          '<div><h2>Your Binder</h2><p class="kicker">IB Diploma · Grade 11</p></div>' +
+        '</div>' +
+        '<div class="empty">You haven\'t added any courses yet. <button class="add-toggle" id="goToSetup" style="--accent:#20262B; margin-left:6px;">Choose your courses</button></div>'
+      );
+    }
+
+    var tiles = mySubjects.map(function(s){
+      var items = ENTRIES.filter(function(e){ return e.subject===s.id; });
+      var notes = items.filter(function(e){ return e.type==='note'; }).length;
+      var tasks = items.filter(function(e){ return e.type==='task'; });
+      var doneTasks = tasks.filter(function(t){ return t.done; }).length;
+      var projects = items.filter(function(e){ return e.type==='project'; });
+      var nextDue = projects.filter(function(p){ return p.dueDate && p.status!=='Done'; })
+        .sort(function(a,b){ return new Date(a.dueDate) - new Date(b.dueDate); })[0];
+      return '<div class="tile" data-view="' + s.id + '" style="--tile-color:' + s.color + '">' +
+        '<h3>' + s.short + '</h3>' +
+        '<span class="lv">' + s.myLevel + '</span>' +
+        '<div class="stats">' +
+          '<div><b>' + notes + '</b>notes</div>' +
+          '<div><b>' + doneTasks + '/' + tasks.length + '</b>tasks</div>' +
+          '<div><b>' + projects.length + '</b>projects</div>' +
+        '</div>' +
+        (nextDue ? '<div class="deadline">' + dueLabel(nextDue.dueDate) + ' — ' + escapeHtml(nextDue.title) + '</div>' : '') +
+      '</div>';
+    }).join('');
+
+    var activeIds = mySubjects.map(function(s){ return s.id; });
+    var allProjects = ENTRIES.filter(function(e){
+      return e.type==='project' && e.dueDate && e.status!=='Done' && activeIds.indexOf(e.subject) !== -1;
+    }).sort(function(a,b){ return new Date(a.dueDate) - new Date(b.dueDate); });
+
+    var deadlineHtml = allProjects.length ? '<ul class="deadline-list">' + allProjects.map(function(p){
+      var subj = subjectById(p.subject);
+      return '<li><span>' + escapeHtml(p.title) + ' <span class="d-when">— ' + (subj?subj.short:'') + '</span></span><span class="d-when">' + dueLabel(p.dueDate) + '</span></li>';
+    }).join('') + '</ul>' : '<div class="empty">No upcoming project deadlines yet. Add a project from any subject page and it will appear here.</div>';
+
+    var totalItems = ENTRIES.filter(function(e){ return activeIds.indexOf(e.subject) !== -1; }).length;
+    var kicker = mySubjects.map(function(s){ return s.short; }).join(' · ');
+
+    return (
+      '<div class="page-header" style="--accent:#20262B">' +
+        '<div><h2>Your Grade 11 Binder</h2><p class="kicker">' + escapeHtml(kicker) + '</p></div>' +
+        '<button class="add-toggle" id="goToSetup" style="--accent:#20262B;">Manage courses</button>' +
+      '</div>' +
+      (totalItems===0 ? '<div class="empty" style="margin-bottom:24px;">Nothing filed yet. Use "+ Add" on any subject page to add a note, task, or project.</div>' : '') +
+      '<div class="tiles">' + tiles + '</div>' +
+      '<h3 class="section-title">Upcoming deadlines</h3>' +
+      deadlineHtml
+    );
+  }
+
+  function renderSubject(subjId){
+    var s = activeSubjects().find(function(a){ return a.id===subjId; });
+    if (!s){
+      // The subject was removed from "My courses" — send them back to Overview
+      // rather than rendering a broken page.
+      currentView = 'overview';
+      return renderOverview();
+    }
+    var items = ENTRIES.filter(function(e){ return e.subject===subjId; });
+    if (levelFilter !== 'All'){
+      items = items.filter(function(e){ return e.level===levelFilter || e.level==='Both'; });
+    }
+    var notes = items.filter(function(e){ return e.type==='note'; }).sort(function(a,b){return b.createdAt-a.createdAt;});
+    var tasks = items.filter(function(e){ return e.type==='task'; }).sort(function(a,b){return (a.done?1:0)-(b.done?1:0) || b.createdAt-a.createdAt;});
+    var projects = items.filter(function(e){ return e.type==='project'; }).sort(function(a,b){
+      if (a.dueDate && b.dueDate) return new Date(a.dueDate)-new Date(b.dueDate);
+      return b.createdAt-a.createdAt;
+    });
+
+    var accent = s.color;
+
+    var notesHtml = notes.length ? notes.map(function(n){
+      return '<div class="card" style="--accent:' + accent + '">' +
+        '<div class="card-top"><h5>' + escapeHtml(n.title) + '</h5><button class="del" data-del="' + n.id + '" title="Remove">×</button></div>' +
+        (n.body ? '<p>' + escapeHtml(n.body) + '</p>' : '') +
+        '<div class="meta">' + n.level + ' · ' + fmtDate(n.createdAt) + '</div>' +
+      '</div>';
+    }).join('') : '<div class="empty">No notes yet for ' + s.short + (levelFilter!=='All'?' '+levelFilter:'') + '. Add one above.</div>';
+
+    var tasksHtml = tasks.length ? tasks.map(function(t){
+      return '<div class="card" style="--accent:' + accent + '">' +
+        '<div class="card-top task-row' + (t.done?' done':'') + '">' +
+          '<input type="checkbox" data-toggle="' + t.id + '" ' + (t.done?'checked':'') + '/>' +
+          '<div style="flex:1"><h5>' + escapeHtml(t.title) + '</h5>' + (t.body ? '<p>'+escapeHtml(t.body)+'</p>' : '') + '</div>' +
+          '<button class="del" data-del="' + t.id + '" title="Remove">×</button>' +
+        '</div>' +
+        '<div class="meta">' + t.level + ' · ' + fmtDate(t.createdAt) + '</div>' +
+      '</div>';
+    }).join('') : '<div class="empty">No tasks yet for ' + s.short + (levelFilter!=='All'?' '+levelFilter:'') + '. Add one above.</div>';
+
+    var projectsHtml = projects.length ? projects.map(function(p){
+      var due = p.dueDate ? daysUntil(p.dueDate) : null;
+      return '<div class="card" style="--accent:' + accent + '">' +
+        '<div class="card-top"><h5>' + escapeHtml(p.title) + '</h5><button class="del" data-del="' + p.id + '" title="Remove">×</button></div>' +
+        (p.body ? '<p>' + escapeHtml(p.body) + '</p>' : '') +
+        (p.dueDate ? '<div class="due' + (due<0?' overdue':'') + '">' + dueLabel(p.dueDate) + '</div>' : '') +
+        '<span class="status-pill" data-status="' + p.id + '" style="background:' + statusColor(p.status) + '">' + p.status + '</span>' +
+        '<div class="meta">' + p.level + ' · ' + fmtDate(p.createdAt) + '</div>' +
+      '</div>';
+    }).join('') : '<div class="empty">No projects yet for ' + s.short + (levelFilter!=='All'?' '+levelFilter:'') + '. Add one above.</div>';
+
+    return (
+      '<div class="page-header" style="--accent:' + accent + '">' +
+        '<div><h2>' + s.name + '</h2><p class="kicker">' + s.short + ' · ' + s.myLevel + ' · Grade 11</p></div>' +
+        '<div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">' +
+          '<div class="level-chips">' +
+            ['All','SL','HL'].map(function(l){
+              return '<button class="chip' + (levelFilter===l?' active':'') + '" data-level="' + l + '" style="--accent:' + accent + '">' + l + '</button>';
+            }).join('') +
+          '</div>' +
+          '<button class="add-toggle" id="addToggleBtn" style="--accent:' + accent + '">' + (quickAddOpen ? 'Close' : '+ Add to ' + s.short) + '</button>' +
+        '</div>' +
+      '</div>' +
+      renderQuickAdd(subjId, s.myLevel, accent) +
+      '<div class="columns">' +
+        '<div class="col"><div class="col-head"><h4>Notes</h4><span>' + notes.length + '</span></div>' + notesHtml + '</div>' +
+        '<div class="col"><div class="col-head"><h4>Tasks</h4><span>' + tasks.filter(function(t){return !t.done;}).length + ' open</span></div>' + tasksHtml + '</div>' +
+        '<div class="col"><div class="col-head"><h4>Projects</h4><span>' + projects.length + '</span></div>' + projectsHtml + '</div>' +
+      '</div>'
+    );
+  }
+
+  function renderQuickAdd(defaultSubject, defaultLevel, accent){
+    var subjOptions = activeSubjects().map(function(s){
+      return '<option value="' + s.id + '"' + (s.id===defaultSubject?' selected':'') + '>' + s.short + '</option>';
+    }).join('');
+    return (
+      '<div class="quick-add' + (quickAddOpen?' open':'') + '" id="quickAddForm">' +
+        '<div class="qa-row">' +
+          '<label>Type' +
+            '<select id="qaType"><option value="note">Note</option><option value="task">Task</option><option value="project">Project</option></select>' +
+          '</label>' +
+          '<label>Subject<select id="qaSubject">' + subjOptions + '</select></label>' +
+          '<label>Level<select id="qaLevel">' +
+            '<option value="SL"' + (defaultLevel==='SL'?' selected':'') + '>SL</option>' +
+            '<option value="HL"' + (defaultLevel==='HL'?' selected':'') + '>HL</option>' +
+            '<option value="Both"' + (defaultLevel==='Both'?' selected':'') + '>SL &amp; HL</option>' +
+          '</select></label>' +
+        '</div>' +
+        '<div class="qa-row">' +
+          '<label style="flex:2">Title<input id="qaTitle" type="text" placeholder="e.g. Enthalpy cycles summary" /></label>' +
+        '</div>' +
+        '<div class="qa-row">' +
+          '<label style="flex:2">Details (optional)<textarea id="qaBody" placeholder="Notes, task details, or a short project description..."></textarea></label>' +
+        '</div>' +
+        '<div class="qa-row" id="qaProjectRow" style="display:none;">' +
+          '<label>Due date<input id="qaDue" type="date" /></label>' +
+          '<label>Status<select id="qaStatus"><option>Not started</option><option>In progress</option><option>Done</option></select></label>' +
+        '</div>' +
+        '<div class="qa-actions">' +
+          '<button type="button" id="qaCancel">Cancel</button>' +
+          '<button type="button" class="primary" id="qaSave" style="--accent:' + accent + '">Add to binder</button>' +
+        '</div>' +
+      '</div>'
+    );
+  }
+
+  function renderCourseSetup(){
+    var isFirstTime = MY_COURSES.length === 0;
+
+    var cards = CATALOG.map(function(s){
+      var course = MY_COURSES.find(function(c){ return c.subjectId===s.id; });
+      var checked = !!course;
+      var level = course ? course.level : null;
+
+      // First-time setup: pre-check anything that already has notes/tasks/
+      // projects filed under it, and guess the level from that data.
+      if (!checked && isFirstTime){
+        var hasEntries = ENTRIES.some(function(e){ return e.subject===s.id; });
+        if (hasEntries){ checked = true; level = inferLevelForSubject(s.id); }
+      }
+      if (!level) level = 'SL';
+
+      return '<div class="course-card' + (checked?' selected':'') + '" data-subject="' + s.id + '" style="--cc-color:' + s.color + '">' +
+        '<label class="course-check"><input type="checkbox" class="course-checkbox" data-subject="' + s.id + '" ' + (checked?'checked':'') + '/>' +
+          '<span class="course-flag" style="--cc-color:' + s.color + '"></span>' + escapeHtml(s.name) +
+        '</label>' +
+        '<div class="course-level">' +
+          '<button type="button" class="level-btn' + (level==='SL'?' active':'') + '" data-level="SL" style="--cc-color:' + s.color + '">SL</button>' +
+          '<button type="button" class="level-btn' + (level==='HL'?' active':'') + '" data-level="HL" style="--cc-color:' + s.color + '">HL</button>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+
+    return (
+      '<div class="page-header" style="--accent:#20262B">' +
+        '<div><h2>' + (isFirstTime ? 'Set up your binder' : 'Manage your courses') + '</h2>' +
+        '<p class="kicker">' + (isFirstTime ? "Pick what you're studying and the level for each" : 'Add, remove, or change the level for any course') + '</p></div>' +
+      '</div>' +
+      '<p class="setup-intro">Tick each course you\'re taking and choose SL or HL. You can reopen this anytime from "Manage courses" — removing a course just hides it, it doesn\'t delete anything you\'ve already filed.</p>' +
+      '<div class="course-grid" id="courseGrid">' + cards + '</div>' +
+      '<div class="setup-actions">' +
+        '<button type="button" class="setup-save" id="saveCoursesBtn">Save my courses</button>' +
+        (isFirstTime ? '' : '<span class="setup-note">Changes apply as soon as you save.</span>') +
+      '</div>'
+    );
+  }
+
+  function escapeHtml(str){
+    return String(str||'').replace(/[&<>"']/g, function(c){
+      return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c];
+    });
+  }
+
+  function wirePageEvents(){
+    // Overview tile clicks
+    document.querySelectorAll('.tile').forEach(function(t){
+      t.addEventListener('click', function(){ setView(t.getAttribute('data-view')); });
+    });
+
+    // Level filter chips
+    document.querySelectorAll('.chip').forEach(function(c){
+      c.addEventListener('click', function(){
+        levelFilter = c.getAttribute('data-level');
+        renderPage();
+      });
+    });
+
+    // Add toggle
+    var addBtn = document.getElementById('addToggleBtn');
+    if (addBtn){
+      addBtn.addEventListener('click', function(){
+        quickAddOpen = !quickAddOpen;
+        renderPage();
+      });
+    }
+
+    // Quick add form
+    var typeSel = document.getElementById('qaType');
+    if (typeSel){
+      typeSel.addEventListener('change', function(){
+        document.getElementById('qaProjectRow').style.display = (typeSel.value==='project') ? 'flex' : 'none';
+      });
+    }
+    var cancelBtn = document.getElementById('qaCancel');
+    if (cancelBtn){
+      cancelBtn.addEventListener('click', function(){ quickAddOpen = false; renderPage(); });
+    }
+    var saveBtn = document.getElementById('qaSave');
+    if (saveBtn){
+      saveBtn.addEventListener('click', function(){
+        var title = document.getElementById('qaTitle').value.trim();
+        if (!title){ document.getElementById('qaTitle').focus(); return; }
+        var type = document.getElementById('qaType').value;
+        var entry = {
+          type: type,
+          subject: document.getElementById('qaSubject').value,
+          level: document.getElementById('qaLevel').value,
+          title: title,
+          body: document.getElementById('qaBody').value.trim(),
+          origin: 'user'
+        };
+        if (type==='task'){ entry.done = false; }
+        if (type==='project'){
+          entry.dueDate = document.getElementById('qaDue').value || null;
+          entry.status = document.getElementById('qaStatus').value;
+        }
+        addEntry(entry);
+        quickAddOpen = false;
+        renderPage();
+      });
+    }
+
+    // Delete buttons
+    document.querySelectorAll('[data-del]').forEach(function(btn){
+      btn.addEventListener('click', function(){ deleteEntry(btn.getAttribute('data-del')); });
+    });
+
+    // Task checkboxes
+    document.querySelectorAll('[data-toggle]').forEach(function(cb){
+      cb.addEventListener('change', function(){ toggleTaskDone(cb.getAttribute('data-toggle')); });
+    });
+
+    // Project status pills
+    document.querySelectorAll('[data-status]').forEach(function(pill){
+      pill.addEventListener('click', function(){ cycleStatus(pill.getAttribute('data-status')); });
+    });
+
+    // Course setup: checking a course reveals its level toggle
+    document.querySelectorAll('.course-checkbox').forEach(function(cb){
+      cb.addEventListener('change', function(){
+        var card = cb.closest('.course-card');
+        card.classList.toggle('selected', cb.checked);
+      });
+    });
+    document.querySelectorAll('.level-btn').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        var card = btn.closest('.course-card');
+        card.querySelectorAll('.level-btn').forEach(function(b){ b.classList.remove('active'); });
+        btn.classList.add('active');
+      });
+    });
+    var saveCoursesBtn = document.getElementById('saveCoursesBtn');
+    if (saveCoursesBtn){
+      saveCoursesBtn.addEventListener('click', function(){
+        var newCourses = [];
+        document.querySelectorAll('.course-card').forEach(function(card){
+          var cb = card.querySelector('.course-checkbox');
+          if (cb.checked){
+            var activeLevelBtn = card.querySelector('.level-btn.active');
+            newCourses.push({
+              subjectId: card.getAttribute('data-subject'),
+              level: activeLevelBtn ? activeLevelBtn.getAttribute('data-level') : 'SL'
+            });
+          }
+        });
+        MY_COURSES = newCourses;
+        saveCourses();
+        currentView = 'overview';
+        renderNav();
+        renderPage();
+      });
+    }
+    document.querySelectorAll('#goToSetup').forEach(function(btn){
+      btn.addEventListener('click', openCourseSetup);
+    });
+  }
+
+  function openCourseSetup(){
+    currentView = 'courseSetup';
+    document.querySelectorAll('#spineNav .tab').forEach(function(btn){ btn.classList.remove('active'); });
+    renderPage();
+  }
+
+  /* ---------------- Export ---------------- */
+  function buildExportText(){
+    var lines = [];
+    lines.push('THE BINDER — IB GRADE 11 STUDY GUIDE');
+    lines.push('Generated ' + new Date().toLocaleDateString());
+    lines.push('');
+
+    if (!ENTRIES.length){
+      lines.push('Nothing filed yet — add notes, tasks, or projects and export again.');
+      return lines.join('\n');
+    }
+
+    CATALOG.forEach(function(s){
+      var items = ENTRIES.filter(function(e){ return e.subject===s.id; });
+      if (!items.length) return;
+      lines.push('========================================');
+      lines.push(s.name.toUpperCase());
+      lines.push('========================================');
+
+      var notes = items.filter(function(e){ return e.type==='note'; });
+      var tasks = items.filter(function(e){ return e.type==='task'; });
+      var projects = items.filter(function(e){ return e.type==='project'; });
+
+      if (notes.length){
+        lines.push('\n-- Notes --');
+        notes.forEach(function(n){
+          lines.push('* [' + n.level + '] ' + n.title);
+          if (n.body) lines.push('  ' + n.body.replace(/\n/g,'\n  '));
+        });
+      }
+      if (tasks.length){
+        lines.push('\n-- Tasks --');
+        tasks.forEach(function(t){
+          lines.push('[' + (t.done?'x':' ') + '] (' + t.level + ') ' + t.title);
+        });
+      }
+      if (projects.length){
+        lines.push('\n-- Projects --');
+        projects.forEach(function(p){
+          lines.push('* [' + p.level + '] ' + p.title + ' — ' + p.status + (p.dueDate ? ' — due ' + p.dueDate : ''));
+          if (p.body) lines.push('  ' + p.body.replace(/\n/g,'\n  '));
+        });
+      }
+      lines.push('');
+    });
+
+    return lines.join('\n');
+  }
+
+  function exportText(){
+    var content = buildExportText();
+    try{
+      var blob = new Blob([content], { type:'text/plain' });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = 'ib-grade11-study-guide.txt';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
+      return;
+    }catch(e){
+      console.error('Blob download unavailable, falling back:', e);
+    }
+    try{
+      var win = window.open('', '_blank');
+      if (win && win.document){
+        win.document.title = 'IB Grade 11 Study Guide';
+        var pre = win.document.createElement('pre');
+        pre.style.whiteSpace = 'pre-wrap';
+        pre.style.fontFamily = 'monospace';
+        pre.style.padding = '24px';
+        pre.style.maxWidth = '700px';
+        pre.style.margin = '0 auto';
+        pre.textContent = content;
+        win.document.body.appendChild(pre);
+        return;
+      }
+    }catch(e2){
+      console.error('Fallback tab failed:', e2);
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(content).then(function(){
+        alert('Your browser blocked the direct download, so the study guide was copied to your clipboard instead — paste it into a document to save it.');
+      }).catch(function(){
+        alert('Could not export automatically. You can still read and copy everything from each subject page.');
+      });
+    } else {
+      alert('Could not export automatically. You can still read and copy everything from each subject page.');
+    }
+  }
+
+  /* ---------------- Auth UI ---------------- */
+  var authMode = 'signin'; // or 'signup'
+
+  function setMsg(text, kind){
+    var el = document.getElementById('gateMsg');
+    el.textContent = text || '';
+    el.className = 'gate-msg' + (kind ? ' ' + kind : '');
+  }
+
+  function friendlyAuthError(err){
+    var code = (err && err.code) || '';
+    switch(code){
+      case 'auth/invalid-email': return 'That email address doesn\'t look right.';
+      case 'auth/missing-password': return 'Please enter a password.';
+      case 'auth/weak-password': return 'Password needs to be at least 6 characters.';
+      case 'auth/email-already-in-use': return 'An account already exists for that email — try signing in instead.';
+      case 'auth/invalid-credential':
+      case 'auth/wrong-password':
+      case 'auth/user-not-found': return 'Email or password is incorrect.';
+      case 'auth/popup-closed-by-user': return 'Sign-in window was closed before finishing.';
+      case 'auth/unauthorized-domain': return 'This site\'s domain isn\'t authorized in Firebase yet (Authentication → Settings → Authorized domains).';
+      case 'auth/operation-not-allowed': return 'This sign-in method isn\'t enabled in your Firebase project yet.';
+      default: return (err && err.message) ? err.message : 'Something went wrong. Please try again.';
+    }
+  }
+
+  function wireAuthUI(){
+    var emailBtn = document.getElementById('emailBtn');
+    var googleBtn = document.getElementById('googleBtn');
+    var emailInput = document.getElementById('gateEmail');
+    var passInput = document.getElementById('gatePassword');
+
+    // Delegate the "sign in ↔ create account" toggle: the link text is
+    // re-rendered each time, so listen on the stable container instead of
+    // the button itself.
+    document.getElementById('gateToggle').addEventListener('click', function(e){
+      if (!e.target || e.target.id !== 'toggleModeBtn') return;
+      authMode = (authMode === 'signin') ? 'signup' : 'signin';
+      emailBtn.textContent = (authMode === 'signin') ? 'Sign in' : 'Create account';
+      passInput.setAttribute('autocomplete', authMode === 'signin' ? 'current-password' : 'new-password');
+      this.innerHTML = (authMode === 'signin')
+        ? 'New here? <button type="button" id="toggleModeBtn">Create an account</button>'
+        : 'Already have an account? <button type="button" id="toggleModeBtn">Sign in</button>';
+      setMsg('');
+    });
+
+    emailBtn.addEventListener('click', async function(){
+      var email = emailInput.value.trim();
+      var pass = passInput.value;
+      if (!email){ setMsg('Please enter your email.', 'err'); emailInput.focus(); return; }
+      if (!pass){ setMsg('Please enter a password.', 'err'); passInput.focus(); return; }
+      emailBtn.disabled = true;
+      setMsg(authMode === 'signin' ? 'Signing in…' : 'Creating your account…');
+      try{
+        if (authMode === 'signin'){
+          await signInWithEmailAndPassword(auth, email, pass);
+        } else {
+          await createUserWithEmailAndPassword(auth, email, pass);
+        }
+        // onAuthStateChanged takes over from here.
+      }catch(err){
+        setMsg(friendlyAuthError(err), 'err');
+      }finally{
+        emailBtn.disabled = false;
+      }
+    });
+
+    passInput.addEventListener('keydown', function(e){ if (e.key === 'Enter'){ emailBtn.click(); } });
+
+    googleBtn.addEventListener('click', async function(){
+      setMsg('Opening Google sign-in…');
+      try{
+        await signInWithPopup(auth, new GoogleAuthProvider());
+      }catch(err){
+        setMsg(friendlyAuthError(err), 'err');
+      }
+    });
+  }
+
+  function showGate(){
+    document.getElementById('boot').hidden = true;
+    document.getElementById('app').hidden = true;
+    document.getElementById('authGate').hidden = false;
+  }
+  function showApp(){
+    document.getElementById('boot').hidden = true;
+    document.getElementById('authGate').hidden = true;
+    document.getElementById('app').hidden = false;
+    var who = document.getElementById('whoami');
+    who.textContent = currentUser.email || currentUser.displayName || 'Signed in';
+  }
+
+  /* ---------------- Init ---------------- */
+  function bootWithoutConfig(){
+    document.getElementById('boot').hidden = true;
+    document.getElementById('authGate').hidden = false;
+    document.getElementById('gateSetup').hidden = false;
+    setMsg('Firebase isn\'t configured yet.', 'err');
+    document.getElementById('emailBtn').disabled = true;
+    document.getElementById('googleBtn').disabled = true;
+  }
+
+  function init(){
+    wireAuthUI();
+    document.getElementById('exportBtn').addEventListener('click', exportText);
+    document.getElementById('signOutBtn').addEventListener('click', function(){
+      if (auth){ signOut(auth); }
+    });
+
+    if (!configLooksReal()){
+      bootWithoutConfig();
+      return;
+    }
+
+    var app = initializeApp(FIREBASE_CONFIG);
+    auth = getAuth(app);
+    db = getFirestore(app);
+
+    // Keep people signed in across visits and devices.
+    setPersistence(auth, browserLocalPersistence).catch(function(){ /* falls back to default */ });
+
+    onAuthStateChanged(auth, function(user){
+      currentUser = user;
+      if (user){
+        showApp();
+        document.getElementById('page').innerHTML = '<div class="empty">Loading your binder…</div>';
+        subscribeBinder();
+      } else {
+        if (unsubscribeBinder){ unsubscribeBinder(); unsubscribeBinder = null; }
+        binderRef = null;
+        ENTRIES = []; DISMISSED = []; MY_COURSES = [];
+        setMsg('');
+        showGate();
+      }
+    });
+  }
+
+  init();
+</script>
+</body>
+</html>
