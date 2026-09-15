@@ -489,26 +489,29 @@
   .file-open:hover{opacity:0.9;}
   .upload-hint{font-size:11.5px; color:var(--ink-soft); margin-top:10px; line-height:1.5;}
 
-  /* ---------- PDF viewer modal ---------- */
+  /* ---------- PDF viewer (full-screen, in-app) ---------- */
   .pdf-modal{
-    position:fixed; inset:0; background:rgba(0,0,0,0.5);
-    display:flex; align-items:center; justify-content:center; padding:24px; z-index:80;
+    position:fixed; inset:0; background:rgba(0,0,0,0.9); z-index:80;
+    display:flex; flex-direction:column;
   }
-  .pdf-box{
-    background:var(--card); color:var(--ink); border-radius:14px;
-    padding:22px 22px 16px; width:100%; max-width:340px; text-align:center;
-    box-shadow:0 20px 60px rgba(0,0,0,0.35);
+  .pdf-bar{
+    display:flex; align-items:center; gap:10px;
+    padding:calc(env(safe-area-inset-top, 0px) + 10px) 14px 10px;
+    background:#15181B; color:#fff;
   }
-  .pdf-box .pdf-name{font-weight:600; font-size:15px; margin-bottom:6px; word-break:break-word;}
-  .pdf-box .pdf-status{font-size:13px; color:var(--ink-soft); margin-bottom:14px; line-height:1.5;}
-  .pdf-actions{display:flex; flex-direction:column; gap:10px; margin-bottom:12px;}
-  .pdf-actions a{
-    display:block; padding:12px; border-radius:9px; font-size:14.5px; font-weight:600;
-    text-decoration:none; cursor:pointer;
+  .pdf-bar .pdf-title{flex:1; font-size:14px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .pdf-bar a, .pdf-bar button{
+    background:rgba(255,255,255,0.16); color:#fff; border:none; border-radius:7px;
+    padding:8px 13px; font-size:13px; font-weight:500; cursor:pointer; text-decoration:none;
   }
-  .pdf-actions .pdf-view{background:#35507A; color:#fff;}
-  .pdf-actions .pdf-dl{background:transparent; color:var(--ink); border:1px solid var(--rule);}
-  .pdf-box .pdf-close{background:none; border:none; color:var(--ink-soft); font-size:13px; cursor:pointer; padding:5px;}
+  .pdf-bar a:hover, .pdf-bar button:hover{background:rgba(255,255,255,0.26);}
+  .pdf-scroll{
+    flex:1; overflow:auto; -webkit-overflow-scrolling:touch;
+    padding:14px 14px calc(env(safe-area-inset-bottom, 0px) + 14px);
+    display:flex; flex-direction:column; align-items:center; gap:12px;
+  }
+  .pdf-scroll canvas{max-width:100%; height:auto; background:#fff; box-shadow:0 2px 12px rgba(0,0,0,0.5); border-radius:2px;}
+  .pdf-msg{color:#dcdcdc; font-size:14px; padding:28px 20px; text-align:center; line-height:1.5;}
 
   /* ---------- Settings ---------- */
   .settings-group{
@@ -972,62 +975,109 @@
     return ids;
   }
 
-  // A small in-app dialog with real "View" / "Download" links. iOS Safari blocks
-  // scripts from opening tabs or downloading, but honours a genuine tap on a real
-  // link — so we build the file, then let the person tap to view or save it.
-  function showPdfModal(name){
+  // Render PDFs inside the app with PDF.js so viewing never depends on the
+  // browser's own PDF handling — which is unreliable on iOS (blob tabs render
+  // blank, downloads are blocked). PDF.js is vendored in vendor/ (same origin,
+  // no CDN) and lazy-loaded the first time a file is opened.
+  var pdfjsReady = null;
+  function loadPdfJs(){
+    if (window.pdfjsLib) return Promise.resolve(window.pdfjsLib);
+    if (pdfjsReady) return pdfjsReady;
+    pdfjsReady = new Promise(function(resolve, reject){
+      var s = document.createElement('script');
+      s.src = 'vendor/pdf.min.js';
+      s.onload = function(){
+        if (window.pdfjsLib){
+          window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'vendor/pdf.worker.min.js';
+          resolve(window.pdfjsLib);
+        } else { reject(new Error('pdf.js unavailable')); }
+      };
+      s.onerror = function(){ pdfjsReady = null; reject(new Error('pdf.js failed to load')); };
+      document.head.appendChild(s);
+    });
+    return pdfjsReady;
+  }
+
+  function dataUrlToBytes(dataUrl){
+    var b64 = dataUrl.slice(dataUrl.indexOf(',') + 1);
+    var bin = atob(b64);
+    var bytes = new Uint8Array(bin.length);
+    for (var i=0; i<bin.length; i++){ bytes[i] = bin.charCodeAt(i); }
+    return bytes;
+  }
+
+  // Full-screen in-app viewer: a top bar (title, Download, Close) and a
+  // scrollable column that pages are rendered into.
+  function openPdfViewer(name){
     var ov = document.createElement('div');
     ov.className = 'pdf-modal';
     ov.innerHTML =
-      '<div class="pdf-box">' +
-        '<div class="pdf-name"></div>' +
-        '<div class="pdf-status">Loading…</div>' +
-        '<div class="pdf-actions" hidden>' +
-          '<a class="pdf-view" target="_blank" rel="noopener">View PDF</a>' +
-          '<a class="pdf-dl">Download</a>' +
-        '</div>' +
+      '<div class="pdf-bar">' +
+        '<span class="pdf-title"></span>' +
+        '<a class="pdf-dl" hidden>Download</a>' +
         '<button class="pdf-close" type="button">Close</button>' +
-      '</div>';
-    ov.querySelector('.pdf-name').textContent = name || 'PDF';
+      '</div>' +
+      '<div class="pdf-scroll"><div class="pdf-msg">Loading…</div></div>';
+    ov.querySelector('.pdf-title').textContent = name || 'PDF';
     document.body.appendChild(ov);
-    var objectUrl = null, closed = false;
+    var scroll = ov.querySelector('.pdf-scroll');
+    var dlUrl = null;
     function close(){
-      if (closed) return; closed = true;
       ov.remove();
-      if (objectUrl){ setTimeout(function(){ URL.revokeObjectURL(objectUrl); }, 1000); }
+      if (dlUrl){ setTimeout(function(){ URL.revokeObjectURL(dlUrl); }, 1000); }
     }
-    ov.addEventListener('click', function(e){ if (e.target === ov) close(); });
     ov.querySelector('.pdf-close').addEventListener('click', close);
     return {
-      ready: function(url, fname){
-        objectUrl = url;
-        ov.querySelector('.pdf-status').hidden = true;
-        var actions = ov.querySelector('.pdf-actions'); actions.hidden = false;
-        var view = ov.querySelector('.pdf-view'); view.href = url;
-        var dl = ov.querySelector('.pdf-dl'); dl.href = url; dl.setAttribute('download', fname || 'file.pdf');
+      scroll: scroll,
+      setMsg: function(m){
+        var el = scroll.querySelector('.pdf-msg');
+        if (!m){ if (el){ el.remove(); } return; }
+        if (!el){ el = document.createElement('div'); el.className = 'pdf-msg'; scroll.appendChild(el); }
+        el.textContent = m;
       },
-      fail: function(msg){ ov.querySelector('.pdf-status').textContent = msg; }
+      setDownload: function(url, fname){
+        dlUrl = url;
+        var a = ov.querySelector('.pdf-dl');
+        a.href = url; a.setAttribute('download', fname || 'file.pdf'); a.hidden = false;
+      }
     };
   }
 
   async function openFile(id){
     var meta = FILES.find(function(f){ return f.id===id; });
     if (!meta) return;
-    var modal = showPdfModal(meta.name);
+    var ui = openPdfViewer(meta.name);
     try{
       var snaps = await Promise.all(fileChunkIds(id, meta.chunks).map(function(cid){
         return getDoc(doc(db, 'binders', currentUser.uid, 'files', cid));
       }));
       if (snaps.some(function(s){ return !s.exists(); })){
-        modal.fail('This PDF hasn’t finished syncing to this device yet. Give it a few seconds and try again.');
+        ui.setMsg('This PDF hasn’t finished syncing to this device yet. Give it a few seconds and try again.');
         return;
       }
       var dataUrl = snaps.map(function(s){ return s.data().data; }).join('');
-      var blob = await (await fetch(dataUrl)).blob();
-      modal.ready(URL.createObjectURL(blob), meta.name);
+      // Always offer a download as a fallback.
+      ui.setDownload(URL.createObjectURL(await (await fetch(dataUrl)).blob()), meta.name);
+
+      var bytes = dataUrlToBytes(dataUrl);
+      var pdfjs = await loadPdfJs();
+      var pdf = await pdfjs.getDocument({ data: bytes }).promise;
+      ui.setMsg('');
+      var cssWidth = Math.max(200, ui.scroll.clientWidth - 28);
+      var dpr = Math.min(window.devicePixelRatio || 1, 2);
+      for (var p=1; p<=pdf.numPages; p++){
+        var page = await pdf.getPage(p);
+        var base = page.getViewport({ scale: 1 });
+        var viewport = page.getViewport({ scale: (cssWidth / base.width) * dpr });
+        var canvas = document.createElement('canvas');
+        canvas.width = viewport.width; canvas.height = viewport.height;
+        canvas.style.width = cssWidth + 'px'; canvas.style.height = 'auto';
+        ui.scroll.appendChild(canvas);
+        await page.render({ canvasContext: canvas.getContext('2d'), viewport: viewport }).promise;
+      }
     }catch(err){
       console.error('Could not open file', err);
-      modal.fail('Could not open that PDF. Check your connection and try again.');
+      ui.setMsg('Could not display this PDF here. Tap Download to open it in your Files app instead.');
     }
   }
 
