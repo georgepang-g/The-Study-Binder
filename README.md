@@ -24,11 +24,16 @@ sign-in and storage. You need to do a one-time setup, then host the file.
 
 ## How the syncing works
 
-- Each signed-in user has one document at `binders/{their-user-id}` in Firestore.
-- Security rules lock that document to that user only.
+- Each signed-in user has one document at `binders/{their-user-id}` in Firestore,
+  plus a private `files` sub-collection for uploaded PDFs.
+- Security rules lock all of it to that user only.
 - The app listens for live changes, so editing on your phone updates your iPad
   and laptop within a second — as long as you're signed in with the same account
   on each.
+- **Offline-ready:** Firestore's local cache (IndexedDB, multi-tab) is enabled, so
+  the app opens instantly, works with no connection, and anything you change while
+  offline is saved on the device and syncs automatically when you reconnect. The
+  sidebar shows an "Offline" note while you're disconnected.
 
 ---
 
@@ -86,6 +91,34 @@ private to them.
 > **Upgrading from the first version?** If you already published the old rules
 > (which had no `files` block), re-paste the rules above and **Publish** again, or
 > PDF uploads will be denied.
+
+#### Optional: stricter rules (defense-in-depth)
+
+The rules above are already secure — each user can only ever touch their own data.
+If you want to also reject malformed writes (stray fields, wrong shapes), you can
+publish this hardened version instead. It matches exactly what the app writes, so
+nothing breaks; it just rejects anything unexpected:
+
+```
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /binders/{uid} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow write: if request.auth != null && request.auth.uid == uid
+                   && request.resource.data.keys().hasOnly(
+                        ['entries','dismissed','courses','files','settings','updatedAt']);
+
+      match /files/{fileId} {
+        allow read, delete: if request.auth != null && request.auth.uid == uid;
+        allow create, update: if request.auth != null && request.auth.uid == uid
+                              && request.resource.data.keys().hasOnly(
+                                   ['i','data','name','type','size','createdAt']);
+      }
+    }
+  }
+}
+```
 
 ---
 
