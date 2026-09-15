@@ -4,6 +4,13 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 <title>The Binder — IB Grade 11</title>
+<link rel="manifest" href="manifest.webmanifest" />
+<meta name="theme-color" content="#20262B" />
+<link rel="icon" href="icon-192.png" />
+<link rel="apple-touch-icon" href="icon-192.png" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Binder" />
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -561,6 +568,60 @@
   .file-open:hover{opacity:0.9;}
   .upload-hint{font-size:11.5px; color:var(--ink-soft); margin-top:10px; line-height:1.5;}
 
+  /* ---------- Search ---------- */
+  .search-box{
+    width:100%; font-family:inherit; font-size:15px; padding:12px 14px;
+    border:1px solid var(--rule); border-radius:10px; background:var(--card); color:var(--ink);
+    margin-bottom:18px;
+  }
+  .search-box:focus{ outline:2px solid var(--ink-soft); outline-offset:1px; }
+  .search-list{list-style:none; margin:0; padding:0;}
+  .search-item{
+    display:flex; align-items:center; gap:11px; padding:11px 12px; cursor:pointer;
+    border:1px solid var(--rule); border-radius:9px; margin-bottom:8px; background:var(--card);
+  }
+  .search-item:hover{border-color:var(--ink-soft);}
+  .search-item .si-ico{font-size:16px; flex-shrink:0;}
+  .search-item .si-flag{width:8px; height:8px; border-radius:2px; flex-shrink:0;}
+  .search-item .si-main{min-width:0; flex:1;}
+  .search-item .si-title{display:block; font-size:14px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .search-item .si-sub{display:block; font-size:12px; color:var(--ink-soft); margin-top:1px;}
+
+  /* ---------- Calendar ---------- */
+  .cal-nav{display:flex; align-items:center; gap:8px;}
+  .cal-nav .cal-month{font-size:14px; font-weight:600; min-width:150px; text-align:center;}
+  .cal-btn{
+    border:1px solid var(--rule); background:var(--card); color:var(--ink);
+    border-radius:7px; padding:6px 11px; font-size:13px; cursor:pointer; line-height:1;
+  }
+  .cal-btn:hover{border-color:var(--ink-soft);}
+  .cal-grid{display:grid; grid-template-columns:repeat(7, 1fr); gap:6px;}
+  .cal-head{font-size:11px; font-weight:600; color:var(--ink-soft); text-align:center; padding:4px 0;}
+  .cal-cell{
+    min-height:92px; border:1px solid var(--rule); border-radius:8px; background:var(--card);
+    padding:6px; display:flex; flex-direction:column; gap:4px;
+  }
+  .cal-cell.empty{background:transparent; border:none;}
+  .cal-cell.today{outline:2px solid var(--ink); outline-offset:-1px;}
+  .cal-cell .cal-day{font-size:12px; font-weight:600; color:var(--ink-soft);}
+  .cal-cell.today .cal-day{color:var(--ink);}
+  .cal-pill{
+    display:flex; align-items:center; gap:5px; width:100%; text-align:left; cursor:pointer;
+    border:none; background:rgba(128,128,128,0.12);
+    color:var(--ink); border-left:3px solid var(--accent);
+    border-radius:5px; padding:3px 6px; font-size:11px; line-height:1.25;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-family:inherit;
+  }
+  .cal-pill:hover{background:rgba(128,128,128,0.22);}
+  .cal-pill .cal-dot{width:6px; height:6px; border-radius:50%; flex-shrink:0;}
+  .cal-pill.done{opacity:0.5; text-decoration:line-through;}
+  .cal-pill.overdue{border-left-color:#C0392B;}
+  @media (max-width: 760px){
+    .cal-cell{min-height:64px;}
+    .cal-pill{font-size:10px;}
+    .cal-nav .cal-month{min-width:110px; font-size:13px;}
+  }
+
   /* ---------- PDF viewer (full-screen, in-app) ---------- */
   .pdf-modal{
     position:fixed; inset:0; background:rgba(0,0,0,0.9); z-index:80;
@@ -843,6 +904,8 @@
   var currentView = 'overview';
   var levelFilter = 'All';
   var quickAddOpen = false;
+  var searchQuery = '';
+  var calMonth = null;   // Date pinned to the 1st of the displayed month (lazy-init)
 
   // Firestore caps a single document at ~1MB, so a PDF is base64-encoded and
   // split into chunk documents (binders/{uid}/files/{id}_c{n}). The metadata in
@@ -1386,15 +1449,17 @@
     var ul = document.getElementById('spineNav');
     var html = '';
     html += navItem('overview', 'Overview', 'All courses', '#8A8378', 0);
+    html += navItem('calendar', 'Calendar', 'Deadlines', '#8A8378', 1);
+    html += navItem('search',   'Search',   'Find anything', '#8A8378', 2);
     var subs = activeSubjects();
     subs.forEach(function(s, i){
-      html += navItem(s.id, s.short, s.myLevel, s.color, i+1);
+      html += navItem(s.id, s.short, s.myLevel, s.color, i+3);
     });
-    html += '<li><button class="tab manage-tab' + (currentView==='courseSetup'?' active':'') + '" id="navManageCourses" style="--i:' + (subs.length+1) + '">' +
+    html += '<li><button class="tab manage-tab' + (currentView==='courseSetup'?' active':'') + '" id="navManageCourses" style="--i:' + (subs.length+3) + '">' +
       '<span class="flag" style="--flag-color:#8A8378"></span>' +
       '<span class="tab-name">Manage courses<span class="tab-sub">Add or edit</span></span>' +
       '</button></li>';
-    html += '<li><button class="tab' + (currentView==='settings'?' active':'') + '" id="navSettings" style="--i:' + (subs.length+2) + '">' +
+    html += '<li><button class="tab' + (currentView==='settings'?' active':'') + '" id="navSettings" style="--i:' + (subs.length+4) + '">' +
       '<span class="flag" style="--flag-color:#8A8378"></span>' +
       '<span class="tab-name">Settings<span class="tab-sub">Theme &amp; sorting</span></span>' +
       '</button></li>';
@@ -1437,6 +1502,10 @@
       page.innerHTML = renderCourseSetup();
     } else if (currentView === 'settings'){
       page.innerHTML = renderSettings();
+    } else if (currentView === 'calendar'){
+      page.innerHTML = renderCalendar();
+    } else if (currentView === 'search'){
+      page.innerHTML = renderSearch();
     } else {
       page.innerHTML = renderSubject(currentView);
     }
@@ -1675,6 +1744,129 @@
     );
   }
 
+  /* ---------------- Search ---------------- */
+  function typeLabel(t){
+    return t==='note' ? 'Note' : t==='task' ? 'Task' : t==='project' ? 'Project' : t==='exam' ? 'Exam prep' : t;
+  }
+  function typeIcon(t){
+    return t==='note' ? '📝' : t==='task' ? '✅' : t==='project' ? '📌' : t==='exam' ? '🎓' : '•';
+  }
+  // Find matching entries and files across the active courses.
+  function searchResults(q){
+    q = (q || '').trim().toLowerCase();
+    if (!q) return [];
+    var activeIds = activeSubjects().map(function(s){ return s.id; });
+    var out = [];
+    ENTRIES.forEach(function(e){
+      if (activeIds.indexOf(e.subject) === -1) return;
+      var hay = (e.title + ' ' + (e.body||'')).toLowerCase();
+      if (hay.indexOf(q) !== -1){ out.push({ kind:'entry', e:e }); }
+    });
+    FILES.forEach(function(f){
+      if (activeIds.indexOf(f.subject) === -1) return;
+      if ((f.name||'').toLowerCase().indexOf(q) !== -1){ out.push({ kind:'file', f:f }); }
+    });
+    return out;
+  }
+  function searchResultsHtml(q){
+    var res = searchResults(q);
+    if (!q.trim()){
+      return '<div class="empty">Type to search across every note, task, project, exam item, and file in your binder.</div>';
+    }
+    if (!res.length){
+      return '<div class="empty">No matches for “' + escapeHtml(q) + '”.</div>';
+    }
+    return '<ul class="search-list">' + res.map(function(r){
+      var subj = activeSubjects().find(function(s){ return s.id === (r.kind==='entry'? r.e.subject : r.f.subject); });
+      var color = subj ? subj.color : '#8A8378';
+      var goto = r.kind==='entry' ? r.e.subject : r.f.subject;
+      if (r.kind === 'entry'){
+        var e = r.e;
+        return '<li class="search-item" data-goto="' + goto + '">' +
+          '<span class="si-ico">' + typeIcon(e.type) + '</span>' +
+          '<span class="si-flag" style="background:' + color + '"></span>' +
+          '<span class="si-main"><span class="si-title">' + escapeHtml(e.title) + '</span>' +
+          '<span class="si-sub">' + (subj?subj.short:'') + ' · ' + typeLabel(e.type) + (e.dueDate?' · due '+e.dueDate:'') + '</span></span>' +
+        '</li>';
+      }
+      var f = r.f;
+      return '<li class="search-item" data-goto="' + goto + '">' +
+        '<span class="si-ico">📄</span>' +
+        '<span class="si-flag" style="background:' + color + '"></span>' +
+        '<span class="si-main"><span class="si-title">' + escapeHtml(f.name) + '</span>' +
+        '<span class="si-sub">' + (subj?subj.short:'') + ' · File · ' + formatSize(f.size) + '</span></span>' +
+      '</li>';
+    }).join('') + '</ul>';
+  }
+  function renderSearch(){
+    return (
+      '<div class="page-header" style="--accent:#20262B">' +
+        '<div><h2>Search</h2><p class="kicker">Find anything across your binder</p></div>' +
+      '</div>' +
+      '<input type="search" id="searchInput" class="search-box" placeholder="Search notes, tasks, projects, files…" value="' + escapeHtml(searchQuery) + '" autocomplete="off" />' +
+      '<div id="searchResults">' + searchResultsHtml(searchQuery) + '</div>'
+    );
+  }
+
+  /* ---------------- Calendar ---------------- */
+  function monthStart(d){ return new Date(d.getFullYear(), d.getMonth(), 1); }
+  function sameDay(a, b){
+    return a.getFullYear()===b.getFullYear() && a.getMonth()===b.getMonth() && a.getDate()===b.getDate();
+  }
+  function renderCalendar(){
+    if (!calMonth){ calMonth = monthStart(new Date()); }
+    var year = calMonth.getFullYear(), month = calMonth.getMonth();
+    var monthName = calMonth.toLocaleDateString(undefined, { month:'long', year:'numeric' });
+    var first = new Date(year, month, 1);
+    var startDow = first.getDay();                 // 0=Sun
+    var daysInMonth = new Date(year, month+1, 0).getDate();
+    var today = new Date(); today.setHours(0,0,0,0);
+    var activeIds = activeSubjects().map(function(s){ return s.id; });
+
+    // Deadlines in this month, grouped by day-of-month.
+    var byDay = {};
+    ENTRIES.forEach(function(e){
+      if (!e.dueDate || activeIds.indexOf(e.subject) === -1) return;
+      var d = new Date(e.dueDate + 'T00:00:00');
+      if (d.getFullYear()!==year || d.getMonth()!==month) return;
+      var day = d.getDate();
+      (byDay[day] = byDay[day] || []).push(e);
+    });
+
+    var dow = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+    var cells = '';
+    for (var i=0;i<startDow;i++){ cells += '<div class="cal-cell empty"></div>'; }
+    for (var day=1; day<=daysInMonth; day++){
+      var cellDate = new Date(year, month, day);
+      var isToday = sameDay(cellDate, today);
+      var items = (byDay[day] || []).sort(function(a,b){ return a.createdAt-b.createdAt; });
+      var pills = items.map(function(e){
+        var subj = activeSubjects().find(function(s){ return s.id===e.subject; });
+        var color = subj ? subj.color : '#8A8378';
+        var done = (e.type==='task'&&e.done) || (e.type==='project'&&e.status==='Done');
+        var overdue = !done && cellDate < today;
+        return '<button class="cal-pill' + (done?' done':'') + (overdue?' overdue':'') + '" data-goto="' + e.subject + '" style="--accent:' + color + '" title="' + escapeHtml(e.title) + ' — ' + (subj?subj.short:'') + '">' +
+          '<span class="cal-dot" style="background:' + color + '"></span>' + escapeHtml(e.title) + '</button>';
+      }).join('');
+      cells += '<div class="cal-cell' + (isToday?' today':'') + '">' +
+        '<div class="cal-day">' + day + '</div>' + pills + '</div>';
+    }
+
+    var heads = dow.map(function(d){ return '<div class="cal-head">' + d + '</div>'; }).join('');
+    return (
+      '<div class="page-header" style="--accent:#20262B">' +
+        '<div><h2>Calendar</h2><p class="kicker">Every deadline, by day</p></div>' +
+        '<div class="cal-nav">' +
+          '<button class="cal-btn" id="calPrev" type="button" aria-label="Previous month">‹</button>' +
+          '<span class="cal-month">' + monthName + '</span>' +
+          '<button class="cal-btn" id="calToday" type="button">Today</button>' +
+          '<button class="cal-btn" id="calNext" type="button" aria-label="Next month">›</button>' +
+        '</div>' +
+      '</div>' +
+      '<div class="cal-grid">' + heads + cells + '</div>'
+    );
+  }
+
   function renderQuickAdd(defaultSubject, defaultLevel, accent){
     var subjOptions = activeSubjects().map(function(s){
       return '<option value="' + s.id + '"' + (s.id===defaultSubject?' selected':'') + '>' + s.short + '</option>';
@@ -1757,11 +1949,39 @@
     });
   }
 
+  function wireGoto(){
+    document.querySelectorAll('[data-goto]').forEach(function(b){
+      b.addEventListener('click', function(){ setView(b.getAttribute('data-goto')); });
+    });
+  }
+
   function wirePageEvents(){
     // Overview tile clicks
     document.querySelectorAll('.tile').forEach(function(t){
       t.addEventListener('click', function(){ setView(t.getAttribute('data-view')); });
     });
+
+    // Search
+    var searchInput = document.getElementById('searchInput');
+    if (searchInput){
+      searchInput.addEventListener('input', function(){
+        searchQuery = searchInput.value;
+        var box = document.getElementById('searchResults');
+        if (box){ box.innerHTML = searchResultsHtml(searchQuery); wireGoto(); }
+      });
+      setTimeout(function(){ try{ searchInput.focus(); }catch(e){} }, 0);
+    }
+
+    // Calendar month navigation
+    var calPrev = document.getElementById('calPrev');
+    if (calPrev){ calPrev.addEventListener('click', function(){ calMonth = new Date(calMonth.getFullYear(), calMonth.getMonth()-1, 1); renderPage(); }); }
+    var calNext = document.getElementById('calNext');
+    if (calNext){ calNext.addEventListener('click', function(){ calMonth = new Date(calMonth.getFullYear(), calMonth.getMonth()+1, 1); renderPage(); }); }
+    var calToday = document.getElementById('calToday');
+    if (calToday){ calToday.addEventListener('click', function(){ calMonth = monthStart(new Date()); renderPage(); }); }
+
+    // Search-result and calendar-pill navigation
+    wireGoto();
 
     // Class level toggle (SL/HL) — persists to the course, so it's remembered
     document.querySelectorAll('[data-setlevel]').forEach(function(b){
@@ -2471,6 +2691,15 @@
         setMsg('');
         showGate();
       }
+    });
+  }
+
+  // Register the service worker so the app installs and works offline.
+  if ('serviceWorker' in navigator){
+    window.addEventListener('load', function(){
+      navigator.serviceWorker.register('sw.js').catch(function(err){
+        console.warn('Service worker registration failed', err);
+      });
     });
   }
 
