@@ -489,6 +489,27 @@
   .file-open:hover{opacity:0.9;}
   .upload-hint{font-size:11.5px; color:var(--ink-soft); margin-top:10px; line-height:1.5;}
 
+  /* ---------- PDF viewer modal ---------- */
+  .pdf-modal{
+    position:fixed; inset:0; background:rgba(0,0,0,0.5);
+    display:flex; align-items:center; justify-content:center; padding:24px; z-index:80;
+  }
+  .pdf-box{
+    background:var(--card); color:var(--ink); border-radius:14px;
+    padding:22px 22px 16px; width:100%; max-width:340px; text-align:center;
+    box-shadow:0 20px 60px rgba(0,0,0,0.35);
+  }
+  .pdf-box .pdf-name{font-weight:600; font-size:15px; margin-bottom:6px; word-break:break-word;}
+  .pdf-box .pdf-status{font-size:13px; color:var(--ink-soft); margin-bottom:14px; line-height:1.5;}
+  .pdf-actions{display:flex; flex-direction:column; gap:10px; margin-bottom:12px;}
+  .pdf-actions a{
+    display:block; padding:12px; border-radius:9px; font-size:14.5px; font-weight:600;
+    text-decoration:none; cursor:pointer;
+  }
+  .pdf-actions .pdf-view{background:#35507A; color:#fff;}
+  .pdf-actions .pdf-dl{background:transparent; color:var(--ink); border:1px solid var(--rule);}
+  .pdf-box .pdf-close{background:none; border:none; color:var(--ink-soft); font-size:13px; cursor:pointer; padding:5px;}
+
   /* ---------- Settings ---------- */
   .settings-group{
     background:var(--card); border:1px solid var(--rule); border-radius:10px;
@@ -951,46 +972,62 @@
     return ids;
   }
 
+  // A small in-app dialog with real "View" / "Download" links. iOS Safari blocks
+  // scripts from opening tabs or downloading, but honours a genuine tap on a real
+  // link — so we build the file, then let the person tap to view or save it.
+  function showPdfModal(name){
+    var ov = document.createElement('div');
+    ov.className = 'pdf-modal';
+    ov.innerHTML =
+      '<div class="pdf-box">' +
+        '<div class="pdf-name"></div>' +
+        '<div class="pdf-status">Loading…</div>' +
+        '<div class="pdf-actions" hidden>' +
+          '<a class="pdf-view" target="_blank" rel="noopener">View PDF</a>' +
+          '<a class="pdf-dl">Download</a>' +
+        '</div>' +
+        '<button class="pdf-close" type="button">Close</button>' +
+      '</div>';
+    ov.querySelector('.pdf-name').textContent = name || 'PDF';
+    document.body.appendChild(ov);
+    var objectUrl = null, closed = false;
+    function close(){
+      if (closed) return; closed = true;
+      ov.remove();
+      if (objectUrl){ setTimeout(function(){ URL.revokeObjectURL(objectUrl); }, 1000); }
+    }
+    ov.addEventListener('click', function(e){ if (e.target === ov) close(); });
+    ov.querySelector('.pdf-close').addEventListener('click', close);
+    return {
+      ready: function(url, fname){
+        objectUrl = url;
+        ov.querySelector('.pdf-status').hidden = true;
+        var actions = ov.querySelector('.pdf-actions'); actions.hidden = false;
+        var view = ov.querySelector('.pdf-view'); view.href = url;
+        var dl = ov.querySelector('.pdf-dl'); dl.href = url; dl.setAttribute('download', fname || 'file.pdf');
+      },
+      fail: function(msg){ ov.querySelector('.pdf-status').textContent = msg; }
+    };
+  }
+
   async function openFile(id){
     var meta = FILES.find(function(f){ return f.id===id; });
     if (!meta) return;
-    // Open the tab NOW, synchronously inside the tap, so phone browsers don't
-    // block it as a popup (they only allow window.open during a user gesture,
-    // and awaiting the download first would lose that gesture).
-    var win = window.open('', '_blank');
-    if (win){
-      try{
-        win.document.write('<!doctype html><meta name="viewport" content="width=device-width">' +
-          '<title>Opening ' + (meta.name || 'PDF') + '</title>' +
-          '<body style="margin:0;height:100vh;display:flex;align-items:center;justify-content:center;' +
-          'font:16px -apple-system,system-ui,sans-serif;color:#555">Opening your PDF…</body>');
-      }catch(e){}
-    }
+    var modal = showPdfModal(meta.name);
     try{
       var snaps = await Promise.all(fileChunkIds(id, meta.chunks).map(function(cid){
         return getDoc(doc(db, 'binders', currentUser.uid, 'files', cid));
       }));
       if (snaps.some(function(s){ return !s.exists(); })){
-        if (win){ win.close(); }
-        alert('This PDF hasn’t finished syncing to this device yet. Give it a few seconds and try again.');
+        modal.fail('This PDF hasn’t finished syncing to this device yet. Give it a few seconds and try again.');
         return;
       }
       var dataUrl = snaps.map(function(s){ return s.data().data; }).join('');
       var blob = await (await fetch(dataUrl)).blob();
-      var url = URL.createObjectURL(blob);
-      if (win){
-        win.location.href = url;              // show the PDF in the tab we already opened
-      } else {
-        // Popups are fully blocked — download the file instead.
-        var a = document.createElement('a');
-        a.href = url; a.download = meta.name || 'file.pdf';
-        document.body.appendChild(a); a.click(); document.body.removeChild(a);
-      }
-      setTimeout(function(){ URL.revokeObjectURL(url); }, 120000);
+      modal.ready(URL.createObjectURL(blob), meta.name);
     }catch(err){
       console.error('Could not open file', err);
-      if (win){ win.close(); }
-      alert('Could not open that PDF. Check your connection and try again.');
+      modal.fail('Could not open that PDF. Check your connection and try again.');
     }
   }
 
