@@ -541,6 +541,22 @@
     display:flex; flex-direction:column; align-items:center; gap:12px;
   }
   .pdf-scroll canvas{max-width:100%; height:auto; background:#fff; box-shadow:0 2px 12px rgba(0,0,0,0.5); border-radius:2px;}
+
+  /* ---------- Spotify now-playing overlay ---------- */
+  .sp-overlay{
+    position:fixed; left:14px; bottom:calc(env(safe-area-inset-bottom, 0px) + 14px);
+    z-index:40; display:flex; align-items:center; gap:10px;
+    background:#121417; color:#fff; border-radius:12px; padding:8px 10px 8px 8px;
+    box-shadow:0 8px 30px rgba(0,0,0,0.45); max-width:min(300px, calc(100vw - 28px));
+  }
+  .sp-overlay .sp-art{width:46px; height:46px; border-radius:8px; object-fit:cover; background:#2a2d31; flex-shrink:0;}
+  .sp-overlay .sp-info{min-width:0; flex:1;}
+  .sp-overlay .sp-track{font-size:13px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .sp-overlay .sp-artist{font-size:11.5px; color:#b3b3b3; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .sp-overlay .sp-bar{height:3px; background:rgba(255,255,255,0.2); border-radius:2px; margin-top:6px; overflow:hidden;}
+  .sp-overlay .sp-bar-fill{height:100%; width:0%; background:#1DB954; transition:width .6s linear;}
+  .sp-overlay .sp-close{background:none; border:none; color:#8a8a8a; cursor:pointer; font-size:16px; line-height:1; align-self:flex-start; padding:0 2px;}
+  .sp-overlay .sp-close:hover{color:#fff;}
   .pdf-msg{color:#dcdcdc; font-size:14px; padding:28px 20px; text-align:center; line-height:1.5;}
 
   /* ---------- Settings ---------- */
@@ -644,12 +660,24 @@
       <span class="who" id="whoami"></span>
       <span class="sync-note">Synced to your account across all your devices.</span>
       <button id="exportBtn" type="button">Export my binder (.txt)</button>
+      <button id="spotifyBtn" class="ghost" type="button" hidden>🎵 Connect Spotify</button>
       <button id="signOutBtn" class="ghost" type="button">Sign out</button>
     </div>
   </nav>
   <div class="page-wrap">
     <div class="page" id="page"></div>
   </div>
+</div>
+
+<!-- Spotify now-playing overlay -->
+<div class="sp-overlay" id="spOverlay" hidden>
+  <img class="sp-art" id="spArt" alt="" />
+  <div class="sp-info">
+    <div class="sp-track" id="spTrack"></div>
+    <div class="sp-artist" id="spArtist"></div>
+    <div class="sp-bar"><div class="sp-bar-fill" id="spBar"></div></div>
+  </div>
+  <button class="sp-close" id="spClose" type="button" title="Hide">×</button>
 </div>
 
 <script type="module">
@@ -670,6 +698,16 @@
     appId:             "1:111437473619:web:80e158e9fd37f55886e3a6",
     measurementId:     "G-T2HCMCJZ2M"
   };
+
+  /* ============================================================
+     1b) SPOTIFY (optional) — corner "now playing" overlay
+     ------------------------------------------------------------
+     Create a free app at https://developer.spotify.com/dashboard,
+     add THIS page's URL as a Redirect URI, then paste the Client ID
+     below. Leave the placeholder to keep Spotify turned off.
+     Full steps are in README.md.
+     ============================================================ */
+  const SPOTIFY_CLIENT_ID = 'PASTE_SPOTIFY_CLIENT_ID';
 
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
   import {
@@ -1941,8 +1979,158 @@
     document.getElementById('googleBtn').disabled = true;
   }
 
+  /* ============================================================
+     Spotify now-playing overlay (optional)
+     ------------------------------------------------------------
+     Uses the Authorization Code + PKCE flow, which works entirely in
+     the browser with no server secret. Tokens live in this browser's
+     localStorage only; nothing about Spotify touches Firestore.
+     ============================================================ */
+  var SP_SCOPES = 'user-read-currently-playing user-read-playback-state';
+  var spPollTimer = null;
+
+  function spConfigured(){ return SPOTIFY_CLIENT_ID && SPOTIFY_CLIENT_ID.indexOf('PASTE_') !== 0; }
+  function spRedirectUri(){ return window.location.origin + window.location.pathname; }
+  function spStore(k, v){ try{ if (v==null){ localStorage.removeItem('sp_'+k); } else { localStorage.setItem('sp_'+k, v); } }catch(e){} }
+  function spGet(k){ try{ return localStorage.getItem('sp_'+k); }catch(e){ return null; } }
+  function spConnected(){ return !!spGet('refresh'); }
+
+  function spB64url(buf){
+    var s = btoa(String.fromCharCode.apply(null, new Uint8Array(buf)));
+    return s.replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+  }
+  function spRand(n){
+    var arr = new Uint8Array(n); crypto.getRandomValues(arr);
+    var chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~';
+    var out = ''; for (var i=0;i<arr.length;i++){ out += chars[arr[i] % chars.length]; }
+    return out;
+  }
+  async function spChallenge(verifier){
+    var digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier));
+    return spB64url(digest);
+  }
+
+  async function spConnect(){
+    if (!spConfigured()) return;
+    var verifier = spRand(64), state = spRand(16);
+    spStore('verifier', verifier); spStore('state', state);
+    var challenge = await spChallenge(verifier);
+    var p = new URLSearchParams({
+      client_id: SPOTIFY_CLIENT_ID, response_type: 'code', redirect_uri: spRedirectUri(),
+      code_challenge_method: 'S256', code_challenge: challenge, scope: SP_SCOPES, state: state
+    });
+    window.location.href = 'https://accounts.spotify.com/authorize?' + p.toString();
+  }
+
+  function spSaveTokens(d){
+    if (d.access_token){ spStore('access', d.access_token); }
+    if (d.refresh_token){ spStore('refresh', d.refresh_token); }
+    if (d.expires_in){ spStore('expiry', String(Date.now() + (d.expires_in - 30) * 1000)); }
+  }
+
+  // If we came back from Spotify with ?code=..., exchange it for tokens.
+  async function spHandleRedirect(){
+    var params = new URLSearchParams(window.location.search);
+    var code = params.get('code'), state = params.get('state');
+    if (!code) return false;
+    var savedState = spGet('state');
+    try{ history.replaceState({}, document.title, spRedirectUri()); }catch(e){}
+    if (!savedState || savedState !== state) return false;
+    var verifier = spGet('verifier');
+    try{
+      var body = new URLSearchParams({
+        grant_type: 'authorization_code', code: code, redirect_uri: spRedirectUri(),
+        client_id: SPOTIFY_CLIENT_ID, code_verifier: verifier
+      });
+      var res = await fetch('https://accounts.spotify.com/api/token', {
+        method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: body
+      });
+      if (!res.ok) return false;
+      spSaveTokens(await res.json());
+      spStore('verifier', null); spStore('state', null);
+      return true;
+    }catch(e){ console.error('Spotify token exchange failed', e); return false; }
+  }
+
+  async function spValidToken(){
+    var access = spGet('access'), expiry = parseInt(spGet('expiry') || '0', 10);
+    if (access && Date.now() < expiry) return access;
+    var refresh = spGet('refresh');
+    if (!refresh) return null;
+    try{
+      var body = new URLSearchParams({ grant_type: 'refresh_token', refresh_token: refresh, client_id: SPOTIFY_CLIENT_ID });
+      var res = await fetch('https://accounts.spotify.com/api/token', {
+        method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: body
+      });
+      if (!res.ok){ if (res.status === 400){ spDisconnect(); } return null; }
+      spSaveTokens(await res.json());
+      return spGet('access');
+    }catch(e){ return null; }
+  }
+
+  function spDisconnect(){
+    spStore('access', null); spStore('refresh', null); spStore('expiry', null);
+    if (spPollTimer){ clearInterval(spPollTimer); spPollTimer = null; }
+    var ov = document.getElementById('spOverlay'); if (ov){ ov.hidden = true; }
+    spUpdateButton();
+  }
+
+  function spUpdateButton(){
+    var btn = document.getElementById('spotifyBtn');
+    if (!btn) return;
+    if (!spConfigured()){ btn.hidden = true; return; }
+    btn.hidden = false;
+    btn.textContent = spConnected() ? 'Disconnect Spotify' : '🎵 Connect Spotify';
+  }
+
+  function spShow(d){
+    var ov = document.getElementById('spOverlay'); if (!ov) return;
+    if (!d || !d.item){ ov.hidden = true; return; }
+    if (ov.dataset.closed === '1') return;   // user hid it this session
+    var it = d.item;
+    var imgs = (it.album && it.album.images) || [];
+    document.getElementById('spArt').src = imgs.length ? imgs[imgs.length-1].url : '';
+    document.getElementById('spTrack').textContent = it.name || '';
+    document.getElementById('spArtist').textContent = (it.artists || []).map(function(a){ return a.name; }).join(', ');
+    var pct = it.duration_ms ? Math.min(100, (d.progress_ms / it.duration_ms) * 100) : 0;
+    document.getElementById('spBar').style.width = pct + '%';
+    ov.hidden = false;
+  }
+
+  async function spPoll(){
+    var token = await spValidToken();
+    if (!token) return;
+    try{
+      var res = await fetch('https://api.spotify.com/v1/me/player/currently-playing', {
+        headers: { Authorization: 'Bearer ' + token }
+      });
+      if (res.status === 204){ spShow(null); return; }   // nothing playing
+      if (res.status === 401){ spStore('expiry', '0'); return; } // force refresh next tick
+      if (!res.ok) return;
+      spShow(await res.json());
+    }catch(e){ /* offline / transient */ }
+  }
+
+  function spStartPolling(){
+    if (spPollTimer){ clearInterval(spPollTimer); }
+    spPoll();
+    spPollTimer = setInterval(spPoll, 5000);
+  }
+
+  async function spInit(){
+    spUpdateButton();
+    var btn = document.getElementById('spotifyBtn');
+    if (btn){ btn.addEventListener('click', function(){ if (spConnected()){ spDisconnect(); } else { spConnect(); } }); }
+    var close = document.getElementById('spClose');
+    if (close){ close.addEventListener('click', function(){ var ov = document.getElementById('spOverlay'); ov.hidden = true; ov.dataset.closed = '1'; }); }
+    if (!spConfigured()) return;
+    if (await spHandleRedirect()){ spUpdateButton(); }
+    if (spConnected()){ spStartPolling(); }
+  }
+
   function init(){
     wireAuthUI();
+    spInit();
     document.getElementById('exportBtn').addEventListener('click', exportText);
     document.getElementById('signOutBtn').addEventListener('click', function(){
       if (auth){ signOut(auth); }
