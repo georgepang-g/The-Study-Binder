@@ -343,6 +343,24 @@
   .due{font-size:11.5px; color:var(--ink-soft); margin-top:6px;}
   .due.overdue{color:#a6512e; font-weight:600;}
 
+  /* Editable deadline on task/project cards */
+  .deadline-edit{display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin-top:8px;}
+  .deadline-edit .cal{font-size:12px; line-height:1;}
+  .deadline-edit .due-input{
+    font-family:inherit; font-size:11.5px; padding:3px 6px;
+    border:1px solid var(--rule); border-radius:5px; color:var(--ink); background:#fffefb;
+    max-width:150px;
+  }
+  html[data-theme="dark"] .deadline-edit .due-input{background:#171C21;}
+  .deadline-edit .due-text{font-size:11.5px; color:var(--ink-soft);}
+  .deadline-edit .due-text.none{font-style:italic;}
+  .deadline-edit .due-text.overdue{color:#a6512e; font-weight:600;}
+  .deadline-edit .due-clear{
+    background:none; border:none; color:#b3ab9c; cursor:pointer; font-size:14px;
+    line-height:1; padding:0 2px;
+  }
+  .deadline-edit .due-clear:hover{color:#a6512e;}
+
   /* Course setup / picker */
   .setup-intro{max-width:560px; color:var(--ink-soft); font-size:14px; line-height:1.6; margin-bottom:22px;}
   .course-grid{
@@ -740,7 +758,7 @@
   // (or null when the subject has none) — used by the "Nearest deadline" sort.
   function nextDeadlineFor(subjId){
     var ds = ENTRIES.filter(function(e){
-      return e.subject===subjId && e.type==='project' && e.dueDate && e.status!=='Done';
+      return e.subject===subjId && isOpenDeadline(e);
     }).map(function(e){ return new Date(e.dueDate + 'T00:00:00').getTime(); });
     if (!ds.length) return null;
     return Math.min.apply(null, ds);
@@ -1118,6 +1136,38 @@
     return 'Due ' + when + ' · in ' + n + ' days';
   }
 
+  // Whether an entry counts as an open (still-upcoming) deadline.
+  function isOpenDeadline(e){
+    if (!e.dueDate) return false;
+    if (e.type === 'project') return e.status !== 'Done';
+    if (e.type === 'task') return !e.done;
+    return false;
+  }
+
+  // An editable deadline control shown on task and project cards: a native date
+  // picker plus a friendly "in 5 days / overdue" label and a clear button.
+  function deadlineControl(e){
+    var set = !!e.dueDate;
+    var overdue = set && daysUntil(e.dueDate) < 0;
+    return '<div class="deadline-edit">' +
+      '<span class="cal">📅</span>' +
+      '<input type="date" class="due-input" data-due="' + e.id + '" value="' + (e.dueDate || '') + '" aria-label="Deadline" />' +
+      (set
+        ? '<span class="due-text' + (overdue?' overdue':'') + '">' + dueLabel(e.dueDate) + '</span>' +
+          '<button class="due-clear" data-dueclear="' + e.id + '" title="Remove deadline">×</button>'
+        : '<span class="due-text none">Add a deadline</span>') +
+    '</div>';
+  }
+
+  // Set or clear the deadline on any entry.
+  function setDeadline(id, value){
+    var e = ENTRIES.find(function(x){ return x.id===id; });
+    if (!e) return;
+    e.dueDate = value || null;
+    saveData();
+    renderPage();
+  }
+
   /* ---------------- Nav ---------------- */
   function renderNav(){
     var ul = document.getElementById('spineNav');
@@ -1199,7 +1249,7 @@
       var doneTasks = tasks.filter(function(t){ return t.done; }).length;
       var projects = items.filter(function(e){ return e.type==='project'; });
       var fileCount = FILES.filter(function(f){ return f.subject===s.id; }).length;
-      var nextDue = projects.filter(function(p){ return p.dueDate && p.status!=='Done'; })
+      var nextDue = items.filter(isOpenDeadline)
         .sort(function(a,b){ return new Date(a.dueDate) - new Date(b.dueDate); })[0];
       return '<div class="tile" data-view="' + s.id + '" style="--tile-color:' + s.color + '">' +
         '<h3>' + s.short + '</h3>' +
@@ -1215,14 +1265,15 @@
     }).join('');
 
     var activeIds = mySubjects.map(function(s){ return s.id; });
-    var allProjects = ENTRIES.filter(function(e){
-      return e.type==='project' && e.dueDate && e.status!=='Done' && activeIds.indexOf(e.subject) !== -1;
+    var allDeadlines = ENTRIES.filter(function(e){
+      return isOpenDeadline(e) && activeIds.indexOf(e.subject) !== -1;
     }).sort(function(a,b){ return new Date(a.dueDate) - new Date(b.dueDate); });
 
-    var deadlineHtml = allProjects.length ? '<ul class="deadline-list">' + allProjects.map(function(p){
-      var subj = subjectById(p.subject);
-      return '<li><span>' + escapeHtml(p.title) + ' <span class="d-when">— ' + (subj?subj.short:'') + '</span></span><span class="d-when">' + dueLabel(p.dueDate) + '</span></li>';
-    }).join('') + '</ul>' : '<div class="empty">No upcoming project deadlines yet. Add a project from any subject page and it will appear here.</div>';
+    var deadlineHtml = allDeadlines.length ? '<ul class="deadline-list">' + allDeadlines.map(function(e){
+      var subj = subjectById(e.subject);
+      var kind = e.type==='task' ? 'Task' : 'Project';
+      return '<li><span>' + escapeHtml(e.title) + ' <span class="d-when">— ' + (subj?subj.short:'') + ' · ' + kind + '</span></span><span class="d-when">' + dueLabel(e.dueDate) + '</span></li>';
+    }).join('') + '</ul>' : '<div class="empty">No upcoming deadlines yet. Add a deadline to any task or project and it will appear here.</div>';
 
     var totalItems = ENTRIES.filter(function(e){ return activeIds.indexOf(e.subject) !== -1; }).length;
     var kicker = mySubjects.map(function(s){ return s.short; }).join(' · ');
@@ -1274,16 +1325,16 @@
           '<div style="flex:1"><h5>' + escapeHtml(t.title) + '</h5>' + (t.body ? '<p>'+escapeHtml(t.body)+'</p>' : '') + '</div>' +
           '<button class="del" data-del="' + t.id + '" title="Remove">×</button>' +
         '</div>' +
+        deadlineControl(t) +
         '<div class="meta">' + t.level + ' · ' + fmtDate(t.createdAt) + '</div>' +
       '</div>';
     }).join('') : '<div class="empty">No' + (SETTINGS.hideCompleted?' open':'') + ' tasks for ' + s.short + '. Add one above.</div>';
 
     var projectsHtml = projects.length ? projects.map(function(p){
-      var due = p.dueDate ? daysUntil(p.dueDate) : null;
       return '<div class="card" style="--accent:' + accent + '">' +
         '<div class="card-top"><h5>' + escapeHtml(p.title) + '</h5><button class="del" data-del="' + p.id + '" title="Remove">×</button></div>' +
         (p.body ? '<p>' + escapeHtml(p.body) + '</p>' : '') +
-        (p.dueDate ? '<div class="due' + (due<0?' overdue':'') + '">' + dueLabel(p.dueDate) + '</div>' : '') +
+        deadlineControl(p) +
         '<span class="status-pill" data-status="' + p.id + '" style="background:' + statusColor(p.status) + '">' + p.status + '</span>' +
         '<div class="meta">' + p.level + ' · ' + fmtDate(p.createdAt) + '</div>' +
       '</div>';
@@ -1390,9 +1441,9 @@
         '<div class="qa-row">' +
           '<label style="flex:2">Details (optional)<textarea id="qaBody" placeholder="Notes, task details, or a short project description..."></textarea></label>' +
         '</div>' +
-        '<div class="qa-row" id="qaProjectRow" style="display:none;">' +
-          '<label>Due date<input id="qaDue" type="date" /></label>' +
-          '<label>Status<select id="qaStatus"><option>Not started</option><option>In progress</option><option>Done</option></select></label>' +
+        '<div class="qa-row" id="qaDueRow" style="display:none;">' +
+          '<label>Deadline (optional)<input id="qaDue" type="date" /></label>' +
+          '<label id="qaStatusWrap">Status<select id="qaStatus"><option>Not started</option><option>In progress</option><option>Done</option></select></label>' +
         '</div>' +
         '<div class="qa-actions">' +
           '<button type="button" id="qaCancel">Cancel</button>' +
@@ -1507,12 +1558,17 @@
       });
     }
 
-    // Quick add form
+    // Quick add form — show the deadline row for tasks and projects,
+    // and the status field only for projects.
     var typeSel = document.getElementById('qaType');
     if (typeSel){
-      typeSel.addEventListener('change', function(){
-        document.getElementById('qaProjectRow').style.display = (typeSel.value==='project') ? 'flex' : 'none';
-      });
+      var syncQaFields = function(){
+        var t = typeSel.value;
+        document.getElementById('qaDueRow').style.display = (t==='task' || t==='project') ? 'flex' : 'none';
+        document.getElementById('qaStatusWrap').style.display = (t==='project') ? 'flex' : 'none';
+      };
+      typeSel.addEventListener('change', syncQaFields);
+      syncQaFields();
     }
     var cancelBtn = document.getElementById('qaCancel');
     if (cancelBtn){
@@ -1532,7 +1588,10 @@
           body: document.getElementById('qaBody').value.trim(),
           origin: 'user'
         };
-        if (type==='task'){ entry.done = false; }
+        if (type==='task'){
+          entry.done = false;
+          entry.dueDate = document.getElementById('qaDue').value || null;
+        }
         if (type==='project'){
           entry.dueDate = document.getElementById('qaDue').value || null;
           entry.status = document.getElementById('qaStatus').value;
@@ -1556,6 +1615,14 @@
     // Project status pills
     document.querySelectorAll('[data-status]').forEach(function(pill){
       pill.addEventListener('click', function(){ cycleStatus(pill.getAttribute('data-status')); });
+    });
+
+    // Deadline: set/change via the date picker, or clear it
+    document.querySelectorAll('[data-due]').forEach(function(inp){
+      inp.addEventListener('change', function(){ setDeadline(inp.getAttribute('data-due'), inp.value || null); });
+    });
+    document.querySelectorAll('[data-dueclear]').forEach(function(btn){
+      btn.addEventListener('click', function(){ setDeadline(btn.getAttribute('data-dueclear'), null); });
     });
 
     // Course setup: checking a course reveals its level toggle
@@ -1643,7 +1710,7 @@
       if (tasks.length){
         lines.push('\n-- Tasks --');
         tasks.forEach(function(t){
-          lines.push('[' + (t.done?'x':' ') + '] (' + t.level + ') ' + t.title);
+          lines.push('[' + (t.done?'x':' ') + '] (' + t.level + ') ' + t.title + (t.dueDate ? ' — due ' + t.dueDate : ''));
         });
       }
       if (projects.length){
