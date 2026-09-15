@@ -4,6 +4,10 @@ A personal study binder for the IB Diploma. Notes, tasks, projects, and PDF
 files for each subject, with SL/HL levels and deadlines.
 
 **Features**
+- **Installable app (PWA)** — add it to your home screen for a real app icon,
+  full-screen launch, and an offline app-shell.
+- **Calendar** view of every deadline, and a **search** bar across all notes,
+  tasks, projects, exam items, and files.
 - Four sections per subject: **Notes, Tasks, Projects, and Exam prep** (past papers).
 - **PDF files organized by section** — upload a PDF straight into Notes, Tasks,
   Projects, or Exam prep; they sync everywhere and render in-app.
@@ -189,8 +193,12 @@ Notes:
 ---
 
 ## Using it day to day
-- Add it to your home screen on iPhone/iPad (Share → **Add to Home Screen**) and
-  it behaves like an app.
+- **Install it:** on iPhone/iPad use Share → **Add to Home Screen**; on desktop
+  Chrome/Edge use the install icon in the address bar. It launches full-screen
+  with its own icon and works offline (a service worker caches the app shell;
+  `manifest.webmanifest`, `sw.js`, and `icon-*.png` are part of the repo).
+- **Calendar** (sidebar) shows all your deadlines on a month grid; **Search**
+  finds anything across your binder.
 - Sign in once per device; you'll stay signed in.
 - Everything you file syncs automatically. There's also a **Download study
   guide (.txt)** button in the sidebar for an offline copy.
