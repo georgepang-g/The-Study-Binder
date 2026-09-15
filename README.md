@@ -120,6 +120,34 @@ Email/password sign-in does not need this.
 
 ---
 
+## Spotify "now playing" overlay (optional)
+
+Shows the song you're currently playing on Spotify in the bottom-left corner. It
+uses Spotify's Authorization Code + PKCE flow, so it works entirely in the
+browser with no server. Your tokens are stored only in that browser; nothing
+about Spotify is written to Firestore. Leave `SPOTIFY_CLIENT_ID` on its
+placeholder to keep this feature off.
+
+1. Go to <https://developer.spotify.com/dashboard>, log in, and click **Create app**.
+2. Fill in any name/description. For **Redirect URI**, enter your site's exact URL
+   including the trailing slash, e.g. `https://your-username.github.io/your-repo/`.
+   Under **APIs used**, tick **Web API**. Save.
+3. Open the app's **Settings** and copy the **Client ID**. Paste it into the
+   `SPOTIFY_CLIENT_ID` value near the top of `index.html` (just below
+   `FIREBASE_CONFIG`), then commit.
+4. Open your site, click **🎵 Connect Spotify** in the sidebar, and authorize.
+   Start playing something on Spotify (any device) and it appears in the corner.
+
+Notes:
+- Reading "now playing" works on **free** Spotify accounts; only *controlling*
+  playback needs Premium, and this overlay never controls playback.
+- It shows a song **only while Spotify is actively playing** somewhere; otherwise
+  it stays hidden.
+- The Client ID is not a secret (it ships in every Spotify web app). The redirect
+  URI must match your live URL exactly, or Spotify will reject the login.
+
+---
+
 ## Using it day to day
 - Add it to your home screen on iPhone/iPad (Share → **Add to Home Screen**) and
   it behaves like an app.
