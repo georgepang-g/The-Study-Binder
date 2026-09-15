@@ -437,6 +437,78 @@
   }
   .boot[hidden]{display:none;}
 
+  /* ---------- Themes (default :root above is "Paper") ---------- */
+  html[data-theme="light"]{
+    --page:#EEF1F4; --card:#FFFFFF; --ink:#1E2427; --ink-soft:#586067;
+    --rule:#D8DDE3; --spine:#242B32;
+  }
+  html[data-theme="dark"]{
+    --page:#15181B; --card:#1E2429; --ink:#E9E9E3; --ink-soft:#9AA2A8;
+    --rule:#2F363C; --spine:#10151A; --spine-text:#EDEDE6; --spine-text-dim:#8C959C;
+  }
+  html[data-theme="dark"] .qa-row input,
+  html[data-theme="dark"] .qa-row select,
+  html[data-theme="dark"] .qa-row textarea{ background:#171C21; color:var(--ink); }
+  /* Only recolor the *inactive* toggle buttons, so active states keep their fill. */
+  html[data-theme="dark"] .qa-actions button,
+  html[data-theme="dark"] .course-level button:not(.active),
+  html[data-theme="dark"] .opt-btn:not(.active),
+  html[data-theme="dark"] .lvl-set:not(.active){ background:#171C21; color:var(--ink-soft); }
+
+  /* ---------- Class level toggle ---------- */
+  .class-level{display:inline-flex; gap:5px;}
+  .lvl-set{
+    border:1px solid var(--rule); background:#fff; color:var(--ink-soft);
+    padding:6px 16px; border-radius:20px; font-size:13px; cursor:pointer; font-weight:500;
+  }
+  .lvl-set.active{ background:var(--accent, var(--ink)); border-color:var(--accent, var(--ink)); color:#fff; }
+
+  /* ---------- Files ---------- */
+  .files-section{margin-bottom:28px;}
+  .files-head{display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:12px;}
+  .files-head h3{font-size:16px; font-weight:600;}
+  .upload-btn{
+    display:inline-block; background:var(--accent,#333); color:#fff;
+    padding:8px 15px; border-radius:7px; font-size:13px; font-weight:500; cursor:pointer;
+  }
+  .upload-btn:hover{opacity:0.92;}
+  .files-grid{display:grid; grid-template-columns:repeat(auto-fill, minmax(250px,1fr)); gap:10px;}
+  .file-card{
+    background:var(--card); border:1px solid var(--rule);
+    border-left:3px solid var(--accent,#999); border-radius:7px;
+    padding:10px 12px; display:flex; align-items:center; gap:10px;
+  }
+  .file-card .fi{font-size:20px; line-height:1; flex-shrink:0;}
+  .file-card .fmeta{flex:1; min-width:0;}
+  .file-card .fmeta h5{font-size:13.5px; font-weight:600; margin:0 0 2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .file-card .fmeta span{font-size:11px; color:var(--ink-soft);}
+  .file-open{
+    background:var(--accent,#333); color:#fff; border:none;
+    padding:6px 12px; border-radius:6px; font-size:12.5px; cursor:pointer; flex-shrink:0;
+  }
+  .file-open:hover{opacity:0.9;}
+  .upload-hint{font-size:11.5px; color:var(--ink-soft); margin-top:10px; line-height:1.5;}
+
+  /* ---------- Settings ---------- */
+  .settings-group{
+    background:var(--card); border:1px solid var(--rule); border-radius:10px;
+    padding:18px 20px; margin-bottom:16px; max-width:660px;
+  }
+  .settings-group h3{font-size:16px; font-weight:600; margin-bottom:4px;}
+  .settings-group .sg-desc{font-size:12.5px; color:var(--ink-soft); margin:0 0 14px;}
+  .opt-row{display:flex; gap:8px; flex-wrap:wrap;}
+  .opt-btn{
+    border:1px solid var(--rule); background:#fff; color:var(--ink-soft);
+    padding:9px 15px; border-radius:8px; font-size:13px; cursor:pointer;
+    display:inline-flex; align-items:center;
+  }
+  .opt-btn:hover{border-color:var(--ink-soft);}
+  .opt-btn.active{ background:var(--ink); border-color:var(--ink); color:var(--page); }
+  .theme-swatch{
+    display:inline-block; width:12px; height:12px; border-radius:3px;
+    margin-right:8px; border:1px solid rgba(128,128,128,0.4);
+  }
+
   @media (max-width: 900px){
     .columns{grid-template-columns:1fr;}
   }
@@ -545,7 +617,7 @@
     createUserWithEmailAndPassword, signOut, GoogleAuthProvider, signInWithPopup, setPersistence, browserLocalPersistence
   } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
   import {
-    getFirestore, doc, onSnapshot, setDoc, serverTimestamp
+    getFirestore, doc, onSnapshot, setDoc, getDoc, deleteDoc, serverTimestamp
   } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
 
   "use strict";
@@ -566,9 +638,16 @@
   var ENTRIES = [];
   var DISMISSED = [];
   var MY_COURSES = [];      // [{ subjectId, level }] — the person's actual course list
+  var FILES = [];           // lightweight PDF metadata: [{ id, subject, name, size, level, createdAt }]
+  var SETTINGS = { theme:'paper', sortBy:'catalog', hideCompleted:false };
   var currentView = 'overview';
   var levelFilter = 'All';
   var quickAddOpen = false;
+
+  // Firestore caps a single document at ~1MB and base64 inflates a file by ~37%,
+  // so the whole PDF (stored in its own doc) must stay comfortably under that.
+  var MAX_FILE_BYTES = 700 * 1024;
+  var MAX_FILE_LABEL = '700 KB';
 
   // Firebase handles
   var auth = null, db = null, currentUser = null;
@@ -595,7 +674,7 @@
   // Catalog subjects the person is actually taking, in catalog order,
   // each annotated with the level (SL/HL) they chose for it.
   function activeSubjects(){
-    return CATALOG.filter(function(s){
+    var list = CATALOG.filter(function(s){
       return MY_COURSES.some(function(c){ return c.subjectId===s.id; });
     }).map(function(s){
       var course = MY_COURSES.find(function(c){ return c.subjectId===s.id; });
@@ -603,10 +682,66 @@
       copy.myLevel = course.level;
       return copy;
     });
+    return sortSubjects(list);
   }
 
   function isSubjectActive(id){
     return MY_COURSES.some(function(c){ return c.subjectId===id; });
+  }
+
+  function courseLevel(subjId){
+    var c = MY_COURSES.find(function(x){ return x.subjectId===subjId; });
+    return c ? c.level : null;
+  }
+
+  /* ---------------- Settings & theme ---------------- */
+  function normalizeSettings(s){
+    s = s || {};
+    return {
+      theme:  (s.theme==='dark' || s.theme==='light' || s.theme==='paper') ? s.theme : 'paper',
+      sortBy: (s.sortBy==='az' || s.sortBy==='deadline' || s.sortBy==='catalog') ? s.sortBy : 'catalog',
+      hideCompleted: !!s.hideCompleted
+    };
+  }
+  function applyTheme(){
+    var t = (SETTINGS && SETTINGS.theme) || 'paper';
+    if (t === 'paper'){ document.documentElement.removeAttribute('data-theme'); }
+    else { document.documentElement.setAttribute('data-theme', t); }
+  }
+
+  /* ---------------- Class sorting ---------------- */
+  // Earliest not-yet-done project deadline for a subject, as a timestamp
+  // (or null when the subject has none) — used by the "Nearest deadline" sort.
+  function nextDeadlineFor(subjId){
+    var ds = ENTRIES.filter(function(e){
+      return e.subject===subjId && e.type==='project' && e.dueDate && e.status!=='Done';
+    }).map(function(e){ return new Date(e.dueDate + 'T00:00:00').getTime(); });
+    if (!ds.length) return null;
+    return Math.min.apply(null, ds);
+  }
+  function sortSubjects(list){
+    var by = (SETTINGS && SETTINGS.sortBy) || 'catalog';
+    if (by === 'az'){
+      return list.slice().sort(function(a,b){ return a.short.localeCompare(b.short); });
+    }
+    if (by === 'deadline'){
+      return list.slice().sort(function(a,b){
+        var da = nextDeadlineFor(a.id), db = nextDeadlineFor(b.id);
+        if (da===null && db===null) return 0;
+        if (da===null) return 1;
+        if (db===null) return -1;
+        return da - db;
+      });
+    }
+    return list; // 'catalog' — leave in catalog order
+  }
+
+  /* ---------------- File helpers ---------------- */
+  function formatSize(bytes){
+    if (bytes == null) return '';
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024*1024) return Math.round(bytes/1024) + ' KB';
+    return (bytes/1024/1024).toFixed(1) + ' MB';
   }
 
   // For a subject with no saved course entry yet, guess the level the
@@ -631,6 +766,8 @@
         entries: ENTRIES,
         dismissed: DISMISSED,
         courses: MY_COURSES,
+        files: FILES,
+        settings: SETTINGS,
         updatedAt: serverTimestamp()
       }, { merge: true });
     }catch(e){
@@ -655,9 +792,13 @@
         ENTRIES   = Array.isArray(d.entries)   ? d.entries   : [];
         DISMISSED = Array.isArray(d.dismissed) ? d.dismissed : [];
         MY_COURSES= Array.isArray(d.courses)   ? d.courses   : [];
+        FILES     = Array.isArray(d.files)     ? d.files     : [];
+        SETTINGS  = normalizeSettings(d.settings);
       } else {
-        ENTRIES = []; DISMISSED = []; MY_COURSES = [];
+        ENTRIES = []; DISMISSED = []; MY_COURSES = []; FILES = [];
+        SETTINGS = normalizeSettings(null);
       }
+      applyTheme();
 
       if (firstSnapshot){
         firstSnapshot = false;
@@ -737,6 +878,95 @@
     return 'var(--notstarted)';
   }
 
+  // Persist the level (SL/HL) chosen for a class so it's remembered on every
+  // device and never has to be picked again.
+  function setClassLevel(subjId, level){
+    var c = MY_COURSES.find(function(x){ return x.subjectId===subjId; });
+    if (!c || c.level===level) return;
+    c.level = level;
+    persist();
+    renderNav();   // the sidebar shows the level under each class
+    renderPage();
+  }
+
+  /* ---------------- PDF files ---------------- */
+  // Each PDF lives in its own document at binders/{uid}/files/{id} so the main
+  // binder document stays small; only lightweight metadata rides along in FILES.
+  function handleFileUpload(file, subjId){
+    var hint = document.getElementById('uploadHint');
+    function setHint(msg, isErr){
+      if (hint){ hint.textContent = msg; hint.style.color = isErr ? '#a6512e' : 'var(--ink-soft)'; }
+    }
+    if (file.type !== 'application/pdf' && !/\.pdf$/i.test(file.name)){
+      setHint('That file isn’t a PDF — please choose a .pdf file.', true); return;
+    }
+    if (file.size > MAX_FILE_BYTES){
+      setHint('“' + file.name + '” is ' + formatSize(file.size) + '. The free plan limits PDFs to ' +
+              MAX_FILE_LABEL + ' — compress it (e.g. smallpdf.com) and try again.', true);
+      return;
+    }
+    if (!binderRef || !currentUser){ setHint('Not connected yet — try again in a moment.', true); return; }
+    setHint('Uploading “' + file.name + '”…');
+    var reader = new FileReader();
+    reader.onload = async function(){
+      try{
+        var id = uid('file');
+        await setDoc(doc(db, 'binders', currentUser.uid, 'files', id), {
+          data: reader.result,           // data:application/pdf;base64,....
+          name: file.name,
+          type: 'application/pdf',
+          size: file.size,
+          createdAt: Date.now()
+        });
+        FILES.push({
+          id: id, subject: subjId, name: file.name, size: file.size,
+          level: courseLevel(subjId) || 'SL', createdAt: Date.now()
+        });
+        await persist();
+        renderPage();
+      }catch(err){
+        console.error('Upload failed', err);
+        setHint('Upload failed. Your Firestore rules may still need the files sub-collection — see README.md.', true);
+      }
+    };
+    reader.onerror = function(){ setHint('Could not read that file — try again.', true); };
+    reader.readAsDataURL(file);
+  }
+
+  async function openFile(id){
+    var meta = FILES.find(function(f){ return f.id===id; });
+    try{
+      var snap = await getDoc(doc(db, 'binders', currentUser.uid, 'files', id));
+      if (!snap.exists()){
+        alert('This PDF could not be found. It may still be syncing, or was removed on another device.');
+        return;
+      }
+      var blob = await (await fetch(snap.data().data)).blob();
+      var url = URL.createObjectURL(blob);
+      var win = window.open(url, '_blank');
+      if (!win){
+        // Popup blocked — download it instead.
+        var a = document.createElement('a');
+        a.href = url; a.download = (meta && meta.name) || 'file.pdf';
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      }
+      setTimeout(function(){ URL.revokeObjectURL(url); }, 60000);
+    }catch(err){
+      console.error('Could not open file', err);
+      alert('Could not open that PDF. Check your connection and try again.');
+    }
+  }
+
+  async function deleteFile(id){
+    var meta = FILES.find(function(f){ return f.id===id; });
+    if (meta && !confirm('Remove “' + meta.name + '” from this class? This deletes the PDF on all your devices.')){ return; }
+    FILES = FILES.filter(function(f){ return f.id!==id; });
+    await persist();
+    renderPage();
+    try{ await deleteDoc(doc(db, 'binders', currentUser.uid, 'files', id)); }
+    catch(err){ console.error('Could not delete file blob', err); }
+  }
+
   function fmtDate(ts){
     var d = new Date(ts);
     return d.toLocaleDateString(undefined, { month:'short', day:'numeric' });
@@ -773,6 +1003,10 @@
       '<span class="flag" style="--flag-color:#8A8378"></span>' +
       '<span class="tab-name">Manage courses<span class="tab-sub">Add or edit</span></span>' +
       '</button></li>';
+    html += '<li><button class="tab' + (currentView==='settings'?' active':'') + '" id="navSettings" style="--i:' + (subs.length+2) + '">' +
+      '<span class="flag" style="--flag-color:#8A8378"></span>' +
+      '<span class="tab-name">Settings<span class="tab-sub">Theme &amp; sorting</span></span>' +
+      '</button></li>';
     ul.innerHTML = html;
 
     ul.querySelectorAll('.tab[data-view]').forEach(function(btn){
@@ -782,6 +1016,8 @@
     });
     var manageBtn = document.getElementById('navManageCourses');
     if (manageBtn){ manageBtn.addEventListener('click', openCourseSetup); }
+    var settingsBtn = document.getElementById('navSettings');
+    if (settingsBtn){ settingsBtn.addEventListener('click', openSettings); }
   }
 
   function navItem(id, name, sub, color, i){
@@ -808,6 +1044,8 @@
       page.innerHTML = renderOverview();
     } else if (currentView === 'courseSetup'){
       page.innerHTML = renderCourseSetup();
+    } else if (currentView === 'settings'){
+      page.innerHTML = renderSettings();
     } else {
       page.innerHTML = renderSubject(currentView);
     }
@@ -832,6 +1070,7 @@
       var tasks = items.filter(function(e){ return e.type==='task'; });
       var doneTasks = tasks.filter(function(t){ return t.done; }).length;
       var projects = items.filter(function(e){ return e.type==='project'; });
+      var fileCount = FILES.filter(function(f){ return f.subject===s.id; }).length;
       var nextDue = projects.filter(function(p){ return p.dueDate && p.status!=='Done'; })
         .sort(function(a,b){ return new Date(a.dueDate) - new Date(b.dueDate); })[0];
       return '<div class="tile" data-view="' + s.id + '" style="--tile-color:' + s.color + '">' +
@@ -841,6 +1080,7 @@
           '<div><b>' + notes + '</b>notes</div>' +
           '<div><b>' + doneTasks + '/' + tasks.length + '</b>tasks</div>' +
           '<div><b>' + projects.length + '</b>projects</div>' +
+          '<div><b>' + fileCount + '</b>files</div>' +
         '</div>' +
         (nextDue ? '<div class="deadline">' + dueLabel(nextDue.dueDate) + ' — ' + escapeHtml(nextDue.title) + '</div>' : '') +
       '</div>';
@@ -880,15 +1120,14 @@
       return renderOverview();
     }
     var items = ENTRIES.filter(function(e){ return e.subject===subjId; });
-    if (levelFilter !== 'All'){
-      items = items.filter(function(e){ return e.level===levelFilter || e.level==='Both'; });
-    }
     var notes = items.filter(function(e){ return e.type==='note'; }).sort(function(a,b){return b.createdAt-a.createdAt;});
     var tasks = items.filter(function(e){ return e.type==='task'; }).sort(function(a,b){return (a.done?1:0)-(b.done?1:0) || b.createdAt-a.createdAt;});
+    if (SETTINGS.hideCompleted){ tasks = tasks.filter(function(t){ return !t.done; }); }
     var projects = items.filter(function(e){ return e.type==='project'; }).sort(function(a,b){
       if (a.dueDate && b.dueDate) return new Date(a.dueDate)-new Date(b.dueDate);
       return b.createdAt-a.createdAt;
     });
+    var subjFiles = FILES.filter(function(f){ return f.subject===subjId; }).sort(function(a,b){ return b.createdAt-a.createdAt; });
 
     var accent = s.color;
 
@@ -898,7 +1137,7 @@
         (n.body ? '<p>' + escapeHtml(n.body) + '</p>' : '') +
         '<div class="meta">' + n.level + ' · ' + fmtDate(n.createdAt) + '</div>' +
       '</div>';
-    }).join('') : '<div class="empty">No notes yet for ' + s.short + (levelFilter!=='All'?' '+levelFilter:'') + '. Add one above.</div>';
+    }).join('') : '<div class="empty">No notes yet for ' + s.short + '. Add one above.</div>';
 
     var tasksHtml = tasks.length ? tasks.map(function(t){
       return '<div class="card" style="--accent:' + accent + '">' +
@@ -909,7 +1148,7 @@
         '</div>' +
         '<div class="meta">' + t.level + ' · ' + fmtDate(t.createdAt) + '</div>' +
       '</div>';
-    }).join('') : '<div class="empty">No tasks yet for ' + s.short + (levelFilter!=='All'?' '+levelFilter:'') + '. Add one above.</div>';
+    }).join('') : '<div class="empty">No' + (SETTINGS.hideCompleted?' open':'') + ' tasks for ' + s.short + '. Add one above.</div>';
 
     var projectsHtml = projects.length ? projects.map(function(p){
       var due = p.dueDate ? daysUntil(p.dueDate) : null;
@@ -920,25 +1159,82 @@
         '<span class="status-pill" data-status="' + p.id + '" style="background:' + statusColor(p.status) + '">' + p.status + '</span>' +
         '<div class="meta">' + p.level + ' · ' + fmtDate(p.createdAt) + '</div>' +
       '</div>';
-    }).join('') : '<div class="empty">No projects yet for ' + s.short + (levelFilter!=='All'?' '+levelFilter:'') + '. Add one above.</div>';
+    }).join('') : '<div class="empty">No projects yet for ' + s.short + '. Add one above.</div>';
+
+    var filesHtml = subjFiles.length ? subjFiles.map(function(f){
+      return '<div class="file-card" style="--accent:' + accent + '">' +
+        '<span class="fi">📄</span>' +
+        '<div class="fmeta"><h5>' + escapeHtml(f.name) + '</h5><span>' + formatSize(f.size) + ' · ' + fmtDate(f.createdAt) + '</span></div>' +
+        '<button class="file-open" data-openfile="' + f.id + '" style="--accent:' + accent + '">Open</button>' +
+        '<button class="del" data-delfile="' + f.id + '" title="Remove">×</button>' +
+      '</div>';
+    }).join('') : '<div class="empty">No PDFs yet for ' + s.short + '. Upload one to keep it filed with this class.</div>';
 
     return (
       '<div class="page-header" style="--accent:' + accent + '">' +
         '<div><h2>' + s.name + '</h2><p class="kicker">' + s.short + ' · ' + s.myLevel + ' · Grade 11</p></div>' +
         '<div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">' +
-          '<div class="level-chips">' +
-            ['All','SL','HL'].map(function(l){
-              return '<button class="chip' + (levelFilter===l?' active':'') + '" data-level="' + l + '" style="--accent:' + accent + '">' + l + '</button>';
-            }).join('') +
+          '<div class="class-level" title="Your level for this class — saved automatically">' +
+            '<button class="lvl-set' + (s.myLevel==='SL'?' active':'') + '" data-setlevel="SL" style="--accent:' + accent + '">SL</button>' +
+            '<button class="lvl-set' + (s.myLevel==='HL'?' active':'') + '" data-setlevel="HL" style="--accent:' + accent + '">HL</button>' +
           '</div>' +
           '<button class="add-toggle" id="addToggleBtn" style="--accent:' + accent + '">' + (quickAddOpen ? 'Close' : '+ Add to ' + s.short) + '</button>' +
         '</div>' +
       '</div>' +
       renderQuickAdd(subjId, s.myLevel, accent) +
+      '<div class="files-section">' +
+        '<div class="files-head"><h3>Files</h3>' +
+          '<label class="upload-btn" style="--accent:' + accent + '">+ Upload PDF' +
+            '<input type="file" id="fileInput" accept="application/pdf,.pdf" hidden></label>' +
+        '</div>' +
+        '<div class="files-grid">' + filesHtml + '</div>' +
+        '<div class="upload-hint" id="uploadHint">PDFs up to ' + MAX_FILE_LABEL + ' each — they sync to all your devices.</div>' +
+      '</div>' +
       '<div class="columns">' +
         '<div class="col"><div class="col-head"><h4>Notes</h4><span>' + notes.length + '</span></div>' + notesHtml + '</div>' +
         '<div class="col"><div class="col-head"><h4>Tasks</h4><span>' + tasks.filter(function(t){return !t.done;}).length + ' open</span></div>' + tasksHtml + '</div>' +
         '<div class="col"><div class="col-head"><h4>Projects</h4><span>' + projects.length + '</span></div>' + projectsHtml + '</div>' +
+      '</div>'
+    );
+  }
+
+  function renderSettings(){
+    var themes = [
+      { id:'paper', name:'Paper',  sw:'#FCFBF7' },
+      { id:'light', name:'Light',  sw:'#EEF1F4' },
+      { id:'dark',  name:'Dark',   sw:'#15181B' }
+    ];
+    var sorts = [
+      { id:'catalog',  name:'Standard order' },
+      { id:'az',       name:'A → Z' },
+      { id:'deadline', name:'Nearest deadline' }
+    ];
+    return (
+      '<div class="page-header" style="--accent:#20262B">' +
+        '<div><h2>Settings</h2><p class="kicker">Personalise how your binder looks and sorts · saved to every device</p></div>' +
+      '</div>' +
+      '<div class="settings-group">' +
+        '<h3>Color theme</h3>' +
+        '<p class="sg-desc">Changes apply instantly.</p>' +
+        '<div class="opt-row">' + themes.map(function(t){
+          return '<button class="opt-btn' + (SETTINGS.theme===t.id?' active':'') + '" data-theme-set="' + t.id + '">' +
+            '<span class="theme-swatch" style="background:' + t.sw + '"></span>' + t.name + '</button>';
+        }).join('') + '</div>' +
+      '</div>' +
+      '<div class="settings-group">' +
+        '<h3>Sort classes</h3>' +
+        '<p class="sg-desc">How your courses are ordered in the sidebar and overview.</p>' +
+        '<div class="opt-row">' + sorts.map(function(o){
+          return '<button class="opt-btn' + (SETTINGS.sortBy===o.id?' active':'') + '" data-sort-set="' + o.id + '">' + o.name + '</button>';
+        }).join('') + '</div>' +
+      '</div>' +
+      '<div class="settings-group">' +
+        '<h3>Completed tasks</h3>' +
+        '<p class="sg-desc">Hide tasks you\'ve already checked off so subject pages stay focused.</p>' +
+        '<div class="opt-row">' +
+          '<button class="opt-btn' + (!SETTINGS.hideCompleted?' active':'') + '" data-hide-set="show">Show completed</button>' +
+          '<button class="opt-btn' + (SETTINGS.hideCompleted?' active':'') + '" data-hide-set="hide">Hide completed</button>' +
+        '</div>' +
       '</div>'
     );
   }
@@ -1031,11 +1327,46 @@
       t.addEventListener('click', function(){ setView(t.getAttribute('data-view')); });
     });
 
-    // Level filter chips
-    document.querySelectorAll('.chip').forEach(function(c){
-      c.addEventListener('click', function(){
-        levelFilter = c.getAttribute('data-level');
-        renderPage();
+    // Class level toggle (SL/HL) — persists to the course, so it's remembered
+    document.querySelectorAll('[data-setlevel]').forEach(function(b){
+      b.addEventListener('click', function(){
+        setClassLevel(currentView, b.getAttribute('data-setlevel'));
+      });
+    });
+
+    // PDF files: upload, open, delete
+    var fileInput = document.getElementById('fileInput');
+    if (fileInput){
+      fileInput.addEventListener('change', function(){
+        var f = fileInput.files && fileInput.files[0];
+        if (f){ handleFileUpload(f, currentView); }
+        fileInput.value = ''; // let the same file be re-picked later
+      });
+    }
+    document.querySelectorAll('[data-openfile]').forEach(function(b){
+      b.addEventListener('click', function(){ openFile(b.getAttribute('data-openfile')); });
+    });
+    document.querySelectorAll('[data-delfile]').forEach(function(b){
+      b.addEventListener('click', function(){ deleteFile(b.getAttribute('data-delfile')); });
+    });
+
+    // Settings controls
+    document.querySelectorAll('[data-theme-set]').forEach(function(b){
+      b.addEventListener('click', function(){
+        SETTINGS.theme = b.getAttribute('data-theme-set');
+        applyTheme(); persist(); renderPage();
+      });
+    });
+    document.querySelectorAll('[data-sort-set]').forEach(function(b){
+      b.addEventListener('click', function(){
+        SETTINGS.sortBy = b.getAttribute('data-sort-set');
+        persist(); renderNav(); renderPage();
+      });
+    });
+    document.querySelectorAll('[data-hide-set]').forEach(function(b){
+      b.addEventListener('click', function(){
+        SETTINGS.hideCompleted = (b.getAttribute('data-hide-set')==='hide');
+        persist(); renderPage();
       });
     });
 
@@ -1141,7 +1472,13 @@
 
   function openCourseSetup(){
     currentView = 'courseSetup';
-    document.querySelectorAll('#spineNav .tab').forEach(function(btn){ btn.classList.remove('active'); });
+    renderNav();
+    renderPage();
+  }
+
+  function openSettings(){
+    currentView = 'settings';
+    renderNav();
     renderPage();
   }
 

@@ -1,7 +1,14 @@
 # The Binder — IB Grade 11
 
-A personal study binder for the IB Diploma. Notes, tasks, and projects for each
-subject, with SL/HL levels and deadlines.
+A personal study binder for the IB Diploma. Notes, tasks, projects, and PDF
+files for each subject, with SL/HL levels and deadlines.
+
+**Features**
+- Notes, tasks, and projects per subject, with due dates and status.
+- **PDF files per class** — upload worksheets or notes and they sync everywhere.
+- **SL/HL per class** — pick your level once and it's remembered on every device.
+- **Settings** — color theme (Paper / Light / Dark), class sort order, and a
+  hide-completed-tasks option, all synced.
 
 **`index.html` is the whole app.** It signs each person in and syncs their binder
 across every device — phone, iPad, and computer — in real time. Everyone who
@@ -55,15 +62,27 @@ In the console: **Build → Authentication → Get started**, then under
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Each user can read and write only their own binder document.
+    // Each user can read and write only their own binder document...
     match /binders/{uid} {
       allow read, write: if request.auth != null && request.auth.uid == uid;
+
+      // ...and only their own uploaded PDF files, which live in a
+      // sub-collection under their binder. (Firestore rules do NOT cascade
+      // to sub-collections, so this inner rule is required for PDF uploads.)
+      match /files/{fileId} {
+        allow read, write: if request.auth != null && request.auth.uid == uid;
+      }
     }
   }
 }
 ```
 
-That single rule is what makes every person's binder private to them.
+That rule is what makes every person's binder — and every PDF they upload —
+private to them.
+
+> **Upgrading from the first version?** If you already published the old rules
+> (which had no `files` block), re-paste the rules above and **Publish** again, or
+> PDF uploads will be denied.
 
 ---
 
@@ -104,6 +123,15 @@ Email/password sign-in does not need this.
 - Sign in once per device; you'll stay signed in.
 - Everything you file syncs automatically. There's also a **Download study
   guide (.txt)** button in the sidebar for an offline copy.
+- **Uploading PDFs:** open a subject, then use **+ Upload PDF** in its Files
+  section. PDFs are stored in Firestore, so on the free (Spark) plan each PDF must
+  be under **700 KB** — Firestore caps any single document at ~1 MB and the file is
+  encoded inside it. If a PDF is too big, compress it first (e.g.
+  <https://smallpdf.com/compress-pdf>). Need bigger files? Upgrade the project to
+  the Blaze plan and switch uploads to Firebase Storage — ask and it can be added.
+- **Your level (SL/HL):** each subject page has an SL/HL toggle next to "+ Add".
+  Tap it once; your choice is saved to that course and follows you everywhere.
+- **Settings** live in the sidebar (theme, class sorting, completed tasks).
 
 ## Testing locally before hosting
 Open a terminal in this folder and run `python3 -m http.server 8000`, then visit
