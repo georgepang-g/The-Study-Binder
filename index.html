@@ -553,12 +553,22 @@
   @media (max-width: 760px){
     .sp-overlay{ top:auto; bottom:calc(env(safe-area-inset-bottom, 0px) + 14px); }
   }
-  .sp-overlay .sp-art{width:46px; height:46px; border-radius:8px; object-fit:cover; background:#2a2d31; flex-shrink:0;}
+  .sp-overlay .sp-art{width:64px; height:64px; border-radius:9px; object-fit:cover; background:#2a2d31; flex-shrink:0;}
   .sp-overlay .sp-info{min-width:0; flex:1;}
   .sp-overlay .sp-track{font-size:13px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
   .sp-overlay .sp-artist{font-size:11.5px; color:#b3b3b3; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
   .sp-overlay .sp-bar{height:3px; background:rgba(255,255,255,0.2); border-radius:2px; margin-top:6px; overflow:hidden;}
   .sp-overlay .sp-bar-fill{height:100%; width:0%; background:#1DB954; transition:width .6s linear;}
+  .sp-overlay .sp-controls{display:flex; align-items:center; gap:6px; margin-top:8px;}
+  .sp-overlay .sp-btn{
+    background:rgba(255,255,255,0.12); border:none; color:#fff; cursor:pointer;
+    width:28px; height:28px; border-radius:50%; font-size:12px; line-height:1;
+    display:flex; align-items:center; justify-content:center; padding:0; flex-shrink:0;
+  }
+  .sp-overlay .sp-btn:hover{background:rgba(255,255,255,0.24);}
+  .sp-overlay .sp-btn.sp-play{background:#1DB954; color:#0b0d0f; width:32px; height:32px; font-size:14px;}
+  .sp-overlay .sp-btn.sp-play:hover{background:#1ed760;}
+  .sp-overlay .sp-msg{font-size:10.5px; color:#f0b76b; line-height:1.2; margin-left:4px;}
   .sp-overlay .sp-close{background:none; border:none; color:#8a8a8a; cursor:pointer; font-size:16px; line-height:1; align-self:flex-start; padding:0 2px;}
   .sp-overlay .sp-close:hover{color:#fff;}
   .pdf-msg{color:#dcdcdc; font-size:14px; padding:28px 20px; text-align:center; line-height:1.5;}
@@ -680,6 +690,12 @@
     <div class="sp-track" id="spTrack"></div>
     <div class="sp-artist" id="spArtist"></div>
     <div class="sp-bar"><div class="sp-bar-fill" id="spBar"></div></div>
+    <div class="sp-controls">
+      <button class="sp-btn" id="spPrev" type="button" title="Previous" aria-label="Previous">⏮</button>
+      <button class="sp-btn sp-play" id="spPlay" type="button" title="Play/Pause" aria-label="Play or pause">▶</button>
+      <button class="sp-btn" id="spNext" type="button" title="Next" aria-label="Next">⏭</button>
+      <span class="sp-msg" id="spMsg"></span>
+    </div>
   </div>
   <button class="sp-close" id="spClose" type="button" title="Hide">×</button>
 </div>
@@ -1990,7 +2006,8 @@
      the browser with no server secret. Tokens live in this browser's
      localStorage only; nothing about Spotify touches Firestore.
      ============================================================ */
-  var SP_SCOPES = 'user-read-currently-playing user-read-playback-state';
+  var SP_SCOPES = 'user-read-currently-playing user-read-playback-state user-modify-playback-state';
+  var spIsPlaying = false;
   var spPollTimer = null;
 
   function spConfigured(){ return SPOTIFY_CLIENT_ID && SPOTIFY_CLIENT_ID.indexOf('PASTE_') !== 0; }
@@ -2093,13 +2110,42 @@
     if (ov.dataset.closed === '1') return;   // user hid it this session
     var it = d.item;
     var imgs = (it.album && it.album.images) || [];
-    document.getElementById('spArt').src = imgs.length ? imgs[imgs.length-1].url : '';
+    document.getElementById('spArt').src = imgs.length ? imgs[0].url : '';   // largest art now that it's bigger
     document.getElementById('spTrack').textContent = it.name || '';
     document.getElementById('spArtist').textContent = (it.artists || []).map(function(a){ return a.name; }).join(', ');
     var pct = it.duration_ms ? Math.min(100, (d.progress_ms / it.duration_ms) * 100) : 0;
     document.getElementById('spBar').style.width = pct + '%';
+    spIsPlaying = !!d.is_playing;
+    var play = document.getElementById('spPlay');
+    if (play){ play.textContent = spIsPlaying ? '⏸' : '▶'; }
     ov.hidden = false;
   }
+
+  function spFlash(msg){
+    var el = document.getElementById('spMsg'); if (!el) return;
+    el.textContent = msg;
+    clearTimeout(spFlash._t);
+    spFlash._t = setTimeout(function(){ el.textContent = ''; }, 4000);
+  }
+
+  // Call a Spotify playback-control endpoint. These need Premium + the
+  // user-modify-playback-state scope; we surface the common failures kindly.
+  async function spControl(method, path){
+    var token = await spValidToken();
+    if (!token){ spFlash('Reconnect Spotify to enable controls.'); return; }
+    try{
+      var res = await fetch('https://api.spotify.com/v1/me/player/' + path, {
+        method: method, headers: { Authorization: 'Bearer ' + token }
+      });
+      if (res.status === 403){ spFlash('Controls need Spotify Premium.'); return; }
+      if (res.status === 404){ spFlash('Play something in Spotify first.'); return; }
+      if (res.status === 401){ spFlash('Reconnect Spotify (new permission needed).'); return; }
+      setTimeout(spPoll, 400);   // reflect the change quickly
+    }catch(e){ /* transient */ }
+  }
+  function spPrev(){ spControl('POST', 'previous'); }
+  function spNext(){ spControl('POST', 'next'); }
+  function spPlayPause(){ spControl('PUT', spIsPlaying ? 'pause' : 'play'); }
 
   async function spPoll(){
     var token = await spValidToken();
@@ -2127,6 +2173,9 @@
     if (btn){ btn.addEventListener('click', function(){ if (spConnected()){ spDisconnect(); } else { spConnect(); } }); }
     var close = document.getElementById('spClose');
     if (close){ close.addEventListener('click', function(){ var ov = document.getElementById('spOverlay'); ov.hidden = true; ov.dataset.closed = '1'; }); }
+    var prev = document.getElementById('spPrev'); if (prev){ prev.addEventListener('click', spPrev); }
+    var play = document.getElementById('spPlay'); if (play){ play.addEventListener('click', spPlayPause); }
+    var next = document.getElementById('spNext'); if (next){ next.addEventListener('click', spNext); }
     if (!spConfigured()) return;
     if (await spHandleRedirect()){ spUpdateButton(); }
     if (spConnected()){ spStartPolling(); }
