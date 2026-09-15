@@ -123,6 +123,9 @@ Email/password sign-in does not need this.
 - Sign in once per device; you'll stay signed in.
 - Everything you file syncs automatically. There's also a **Download study
   guide (.txt)** button in the sidebar for an offline copy.
+- **Viewing PDFs:** tapping **Open** renders the PDF right inside the app (using
+  the bundled PDF.js in `vendor/`), so it works on iPhone/iPad where the browser
+  won't reliably open PDFs on its own. A **Download** button is there too.
 - **Uploading PDFs:** open a subject, then use **+ Upload PDF** in its Files
   section. PDFs are stored in Firestore. Because Firestore caps any single
   document at ~1 MB, each PDF is base64-encoded and split into chunk documents
