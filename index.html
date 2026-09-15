@@ -544,10 +544,14 @@
 
   /* ---------- Spotify now-playing overlay ---------- */
   .sp-overlay{
-    position:fixed; left:14px; bottom:calc(env(safe-area-inset-bottom, 0px) + 14px);
+    position:fixed; right:14px; top:calc(env(safe-area-inset-top, 0px) + 14px);
     z-index:40; display:flex; align-items:center; gap:10px;
     background:#121417; color:#fff; border-radius:12px; padding:8px 10px 8px 8px;
     box-shadow:0 8px 30px rgba(0,0,0,0.45); max-width:min(300px, calc(100vw - 28px));
+  }
+  /* On phones the nav is a bar across the top, so drop the overlay to the bottom. */
+  @media (max-width: 760px){
+    .sp-overlay{ top:auto; bottom:calc(env(safe-area-inset-bottom, 0px) + 14px); }
   }
   .sp-overlay .sp-art{width:46px; height:46px; border-radius:8px; object-fit:cover; background:#2a2d31; flex-shrink:0;}
   .sp-overlay .sp-info{min-width:0; flex:1;}
