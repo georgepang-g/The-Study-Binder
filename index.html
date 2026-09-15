@@ -580,6 +580,22 @@
   .sp-overlay .sp-msg{font-size:11px; color:#f0b76b; line-height:1.2; margin-left:4px;}
   .sp-overlay .sp-close{background:none; border:none; color:#9a9a9a; cursor:pointer; font-size:18px; line-height:1; align-self:flex-start; padding:0 2px;}
   .sp-overlay .sp-close:hover{color:#fff;}
+  /* Volume */
+  .sp-overlay .sp-volume{display:flex; align-items:center; gap:9px; margin-top:11px; touch-action:auto;}
+  .sp-overlay .sp-volico{width:17px; height:17px; color:#b7b7b7; flex-shrink:0;}
+  .sp-overlay .sp-vol{
+    -webkit-appearance:none; appearance:none; width:100%; height:4px; border-radius:2px;
+    background:rgba(255,255,255,0.22); cursor:pointer; touch-action:auto;
+  }
+  .sp-overlay .sp-vol::-webkit-slider-thumb{
+    -webkit-appearance:none; appearance:none; width:14px; height:14px; border-radius:50%;
+    background:#fff; cursor:pointer; box-shadow:0 1px 3px rgba(0,0,0,0.5);
+  }
+  .sp-overlay .sp-vol::-moz-range-thumb{width:14px; height:14px; border:none; border-radius:50%; background:#fff; cursor:pointer;}
+  /* Dragging: album art + track/artist are the grab handles */
+  .sp-overlay .sp-grab{cursor:grab; touch-action:none; user-select:none; -webkit-user-select:none; -webkit-user-drag:none;}
+  .sp-overlay.dragging, .sp-overlay.dragging .sp-grab{cursor:grabbing;}
+  .sp-overlay.dragging{animation:none;}
   .pdf-msg{color:#dcdcdc; font-size:14px; padding:28px 20px; text-align:center; line-height:1.5;}
 
   /* ---------- Settings ---------- */
@@ -694,16 +710,22 @@
 
 <!-- Spotify now-playing overlay -->
 <div class="sp-overlay" id="spOverlay" hidden>
-  <img class="sp-art" id="spArt" alt="" />
+  <img class="sp-art sp-grab" id="spArt" alt="" draggable="false" />
   <div class="sp-info">
-    <div class="sp-track" id="spTrack"></div>
-    <div class="sp-artist" id="spArtist"></div>
-    <div class="sp-bar"><div class="sp-bar-fill" id="spBar"></div></div>
+    <div class="sp-meta sp-grab">
+      <div class="sp-track" id="spTrack"></div>
+      <div class="sp-artist" id="spArtist"></div>
+      <div class="sp-bar"><div class="sp-bar-fill" id="spBar"></div></div>
+    </div>
     <div class="sp-controls">
       <button class="sp-btn" id="spPrev" type="button" title="Previous" aria-label="Previous"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 6h2v12H6zM18 6 9.5 12 18 18z"/></svg></button>
       <button class="sp-btn sp-play" id="spPlay" type="button" title="Play/Pause" aria-label="Play or pause"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg></button>
       <button class="sp-btn" id="spNext" type="button" title="Next" aria-label="Next"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16 6h2v12h-2zM6 6 14.5 12 6 18z"/></svg></button>
       <span class="sp-msg" id="spMsg"></span>
+    </div>
+    <div class="sp-volume">
+      <svg class="sp-volico" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3 10v4h4l5 5V5L7 10H3zm13.5 2c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/></svg>
+      <input type="range" min="0" max="100" value="50" id="spVol" class="sp-vol" aria-label="Volume" />
     </div>
   </div>
   <button class="sp-close" id="spClose" type="button" title="Hide">×</button>
@@ -2017,6 +2039,7 @@
      ============================================================ */
   var SP_SCOPES = 'user-read-currently-playing user-read-playback-state user-modify-playback-state';
   var spIsPlaying = false;
+  var spVolDragging = false;
   var SP_ICON = {
     play:  '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>',
     pause: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 5h4v14H6zm8 0h4v14h-4z"/></svg>'
@@ -2131,7 +2154,12 @@
     spIsPlaying = !!d.is_playing;
     var play = document.getElementById('spPlay');
     if (play){ play.innerHTML = spIsPlaying ? SP_ICON.pause : SP_ICON.play; }
+    if (d.device && typeof d.device.volume_percent === 'number'){
+      var vol = document.getElementById('spVol');
+      if (vol && !spVolDragging){ vol.value = d.device.volume_percent; }
+    }
     ov.hidden = false;
+    if (ov.style.left){ spClamp(ov); }   // keep a dragged overlay on-screen
   }
 
   function spFlash(msg){
@@ -2160,14 +2188,72 @@
   function spNext(){ spControl('POST', 'next'); }
   function spPlayPause(){ spControl('PUT', spIsPlaying ? 'pause' : 'play'); }
 
+  async function spSetVolume(pct){
+    var token = await spValidToken();
+    if (!token){ spFlash('Reconnect Spotify for controls.'); return; }
+    try{
+      var res = await fetch('https://api.spotify.com/v1/me/player/volume?volume_percent=' + Math.round(pct), {
+        method: 'PUT', headers: { Authorization: 'Bearer ' + token }
+      });
+      if (res.status === 403){ spFlash('Volume needs Spotify Premium.'); }
+      else if (res.status === 404){ spFlash('Play something in Spotify first.'); }
+    }catch(e){ /* transient */ }
+  }
+
+  /* ---- Draggable overlay (default position is top-right via CSS) ---- */
+  function spGetPos(){ try{ var s = localStorage.getItem('sp_pos'); return s ? JSON.parse(s) : null; }catch(e){ return null; } }
+  function spSetPos(p){ try{ localStorage.setItem('sp_pos', JSON.stringify(p)); }catch(e){} }
+  function spClamp(ov){
+    if (ov.hidden || !ov.offsetWidth) return;
+    var maxX = window.innerWidth - ov.offsetWidth - 4;
+    var maxY = window.innerHeight - ov.offsetHeight - 4;
+    var l = Math.max(4, Math.min(maxX, parseInt(ov.style.left, 10) || 0));
+    var t = Math.max(4, Math.min(maxY, parseInt(ov.style.top, 10) || 0));
+    ov.style.left = l + 'px'; ov.style.top = t + 'px';
+  }
+  function spApplySavedPos(){
+    var ov = document.getElementById('spOverlay'); if (!ov) return;
+    var pos = spGetPos(); if (!pos) return;   // none saved → keep CSS default (top-right)
+    ov.style.right = 'auto'; ov.style.bottom = 'auto';
+    ov.style.left = pos.left + 'px'; ov.style.top = pos.top + 'px';
+  }
+  function spEnableDrag(){
+    var ov = document.getElementById('spOverlay'); if (!ov) return;
+    var dragging = false, sx = 0, sy = 0, ox = 0, oy = 0;
+    ov.addEventListener('pointerdown', function(e){
+      if (!e.target.closest('.sp-grab')) return;   // only the album art / text drag
+      var r = ov.getBoundingClientRect();
+      dragging = true; sx = e.clientX; sy = e.clientY; ox = r.left; oy = r.top;
+      ov.style.right = 'auto'; ov.style.bottom = 'auto';
+      ov.style.left = r.left + 'px'; ov.style.top = r.top + 'px';
+      ov.classList.add('dragging');
+      try{ ov.setPointerCapture(e.pointerId); }catch(_){}
+      e.preventDefault();
+    });
+    ov.addEventListener('pointermove', function(e){
+      if (!dragging) return;
+      var nx = Math.max(4, Math.min(window.innerWidth  - ov.offsetWidth  - 4, ox + (e.clientX - sx)));
+      var ny = Math.max(4, Math.min(window.innerHeight - ov.offsetHeight - 4, oy + (e.clientY - sy)));
+      ov.style.left = nx + 'px'; ov.style.top = ny + 'px';
+    });
+    function end(){
+      if (!dragging) return;
+      dragging = false; ov.classList.remove('dragging');
+      spSetPos({ left: parseInt(ov.style.left, 10) || 0, top: parseInt(ov.style.top, 10) || 0 });
+    }
+    ov.addEventListener('pointerup', end);
+    ov.addEventListener('pointercancel', end);
+  }
+
   async function spPoll(){
     var token = await spValidToken();
     if (!token) return;
     try{
-      var res = await fetch('https://api.spotify.com/v1/me/player/currently-playing', {
+      // Full player state includes the current device's volume.
+      var res = await fetch('https://api.spotify.com/v1/me/player', {
         headers: { Authorization: 'Bearer ' + token }
       });
-      if (res.status === 204){ spShow(null); return; }   // nothing playing
+      if (res.status === 204){ spShow(null); return; }   // no active device
       if (res.status === 401){ spStore('expiry', '0'); return; } // force refresh next tick
       if (!res.ok) return;
       spShow(await res.json());
@@ -2189,6 +2275,17 @@
     var prev = document.getElementById('spPrev'); if (prev){ prev.addEventListener('click', spPrev); }
     var play = document.getElementById('spPlay'); if (play){ play.addEventListener('click', spPlayPause); }
     var next = document.getElementById('spNext'); if (next){ next.addEventListener('click', spNext); }
+    var vol = document.getElementById('spVol');
+    if (vol){
+      vol.addEventListener('input', function(){ spVolDragging = true; });
+      vol.addEventListener('change', function(){
+        spSetVolume(parseInt(vol.value, 10));
+        setTimeout(function(){ spVolDragging = false; }, 1500);   // let Spotify catch up before polls resync
+      });
+    }
+    spApplySavedPos();
+    spEnableDrag();
+    window.addEventListener('resize', function(){ spClamp(document.getElementById('spOverlay')); });
     if (!spConfigured()) return;
     if (await spHandleRedirect()){ spUpdateButton(); }
     if (spConnected()){ spStartPolling(); }
