@@ -544,32 +544,41 @@
 
   /* ---------- Spotify now-playing overlay ---------- */
   .sp-overlay{
-    position:fixed; right:14px; top:calc(env(safe-area-inset-top, 0px) + 14px);
-    z-index:40; display:flex; align-items:center; gap:10px;
-    background:#121417; color:#fff; border-radius:12px; padding:8px 10px 8px 8px;
-    box-shadow:0 8px 30px rgba(0,0,0,0.45); max-width:min(300px, calc(100vw - 28px));
+    position:fixed; right:16px; top:calc(env(safe-area-inset-top, 0px) + 16px);
+    z-index:40; display:flex; align-items:center; gap:14px;
+    background:linear-gradient(155deg, #1c2a22 0%, #121417 60%);
+    color:#fff; border-radius:18px; padding:14px 16px 14px 14px;
+    border:1px solid rgba(255,255,255,0.09);
+    box-shadow:0 20px 55px rgba(0,0,0,0.6), 0 0 0 1px rgba(0,0,0,0.4);
+    max-width:min(360px, calc(100vw - 32px));
+    animation:spPop .28s cubic-bezier(.2,.8,.25,1);
   }
+  @keyframes spPop{ from{ opacity:0; transform:translateY(-8px) scale(.96); } to{ opacity:1; transform:none; } }
   /* On phones the nav is a bar across the top, so drop the overlay to the bottom. */
   @media (max-width: 760px){
-    .sp-overlay{ top:auto; bottom:calc(env(safe-area-inset-bottom, 0px) + 14px); }
+    .sp-overlay{ top:auto; bottom:calc(env(safe-area-inset-bottom, 0px) + 16px); }
   }
-  .sp-overlay .sp-art{width:64px; height:64px; border-radius:9px; object-fit:cover; background:#2a2d31; flex-shrink:0;}
+  .sp-overlay .sp-art{width:84px; height:84px; border-radius:12px; object-fit:cover; background:#2a2d31; flex-shrink:0; box-shadow:0 4px 14px rgba(0,0,0,0.5);}
   .sp-overlay .sp-info{min-width:0; flex:1;}
-  .sp-overlay .sp-track{font-size:13px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
-  .sp-overlay .sp-artist{font-size:11.5px; color:#b3b3b3; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
-  .sp-overlay .sp-bar{height:3px; background:rgba(255,255,255,0.2); border-radius:2px; margin-top:6px; overflow:hidden;}
+  .sp-overlay .sp-track{font-size:15px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .sp-overlay .sp-artist{font-size:12.5px; color:#b7b7b7; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:1px;}
+  .sp-overlay .sp-bar{height:4px; background:rgba(255,255,255,0.18); border-radius:2px; margin-top:9px; overflow:hidden;}
   .sp-overlay .sp-bar-fill{height:100%; width:0%; background:#1DB954; transition:width .6s linear;}
-  .sp-overlay .sp-controls{display:flex; align-items:center; gap:6px; margin-top:8px;}
+  .sp-overlay .sp-controls{display:flex; align-items:center; gap:10px; margin-top:11px;}
   .sp-overlay .sp-btn{
     background:rgba(255,255,255,0.12); border:none; color:#fff; cursor:pointer;
-    width:28px; height:28px; border-radius:50%; font-size:12px; line-height:1;
+    width:38px; height:38px; border-radius:50%;
     display:flex; align-items:center; justify-content:center; padding:0; flex-shrink:0;
+    transition:transform .12s ease, background .15s ease;
   }
-  .sp-overlay .sp-btn:hover{background:rgba(255,255,255,0.24);}
-  .sp-overlay .sp-btn.sp-play{background:#1DB954; color:#0b0d0f; width:32px; height:32px; font-size:14px;}
+  .sp-overlay .sp-btn svg{width:20px; height:20px; display:block;}
+  .sp-overlay .sp-btn:hover{background:rgba(255,255,255,0.24); transform:scale(1.08);}
+  .sp-overlay .sp-btn:active{transform:scale(.94);}
+  .sp-overlay .sp-btn.sp-play{background:#1DB954; color:#0b0d0f; width:48px; height:48px;}
+  .sp-overlay .sp-btn.sp-play svg{width:26px; height:26px;}
   .sp-overlay .sp-btn.sp-play:hover{background:#1ed760;}
-  .sp-overlay .sp-msg{font-size:10.5px; color:#f0b76b; line-height:1.2; margin-left:4px;}
-  .sp-overlay .sp-close{background:none; border:none; color:#8a8a8a; cursor:pointer; font-size:16px; line-height:1; align-self:flex-start; padding:0 2px;}
+  .sp-overlay .sp-msg{font-size:11px; color:#f0b76b; line-height:1.2; margin-left:4px;}
+  .sp-overlay .sp-close{background:none; border:none; color:#9a9a9a; cursor:pointer; font-size:18px; line-height:1; align-self:flex-start; padding:0 2px;}
   .sp-overlay .sp-close:hover{color:#fff;}
   .pdf-msg{color:#dcdcdc; font-size:14px; padding:28px 20px; text-align:center; line-height:1.5;}
 
@@ -691,9 +700,9 @@
     <div class="sp-artist" id="spArtist"></div>
     <div class="sp-bar"><div class="sp-bar-fill" id="spBar"></div></div>
     <div class="sp-controls">
-      <button class="sp-btn" id="spPrev" type="button" title="Previous" aria-label="Previous">⏮</button>
-      <button class="sp-btn sp-play" id="spPlay" type="button" title="Play/Pause" aria-label="Play or pause">▶</button>
-      <button class="sp-btn" id="spNext" type="button" title="Next" aria-label="Next">⏭</button>
+      <button class="sp-btn" id="spPrev" type="button" title="Previous" aria-label="Previous"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 6h2v12H6zM18 6 9.5 12 18 18z"/></svg></button>
+      <button class="sp-btn sp-play" id="spPlay" type="button" title="Play/Pause" aria-label="Play or pause"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg></button>
+      <button class="sp-btn" id="spNext" type="button" title="Next" aria-label="Next"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16 6h2v12h-2zM6 6 14.5 12 6 18z"/></svg></button>
       <span class="sp-msg" id="spMsg"></span>
     </div>
   </div>
@@ -2008,6 +2017,10 @@
      ============================================================ */
   var SP_SCOPES = 'user-read-currently-playing user-read-playback-state user-modify-playback-state';
   var spIsPlaying = false;
+  var SP_ICON = {
+    play:  '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>',
+    pause: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 5h4v14H6zm8 0h4v14h-4z"/></svg>'
+  };
   var spPollTimer = null;
 
   function spConfigured(){ return SPOTIFY_CLIENT_ID && SPOTIFY_CLIENT_ID.indexOf('PASTE_') !== 0; }
@@ -2117,7 +2130,7 @@
     document.getElementById('spBar').style.width = pct + '%';
     spIsPlaying = !!d.is_playing;
     var play = document.getElementById('spPlay');
-    if (play){ play.textContent = spIsPlaying ? '⏸' : '▶'; }
+    if (play){ play.innerHTML = spIsPlaying ? SP_ICON.pause : SP_ICON.play; }
     ov.hidden = false;
   }
 
