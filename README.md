@@ -12,7 +12,8 @@ files for each subject, with SL/HL levels and deadlines.
 - **Flashcards** — build revision decks per subject and study them in a flip-card
   mode ("Got it" / "Again" re-queues cards until you know them all).
 - **Study timer** — a focus countdown (15 / 25 / 50 min or a custom length) that
-  logs each finished session to a subject, plus stats: last-7-days focus time,
+  logs each finished session to a subject, plus stats: a **🔥 day streak**
+  (consecutive days you've studied, with your best run), last-7-days focus time,
   minutes per subject, minutes per day, and a recent-sessions list. You can also
   log time by hand.
 - **Calendar** view of every deadline, and a **search** bar across all notes,

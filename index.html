@@ -807,6 +807,10 @@
   html.theme-dark .tm-subj select, html.theme-dark .tm-custom,
   html.theme-dark .ml-subject, html.theme-dark .ml-min{background:#171C21;}
   html.theme-dark .tm-preset.active{color:var(--card);}
+  .tm-streak .tm-flame{font-size:.72em; margin-right:4px; filter:grayscale(1); opacity:.55;}
+  .tm-streak.lit{border-color:#E8A13C;}
+  .tm-streak.lit .tm-flame{filter:none; opacity:1;}
+  .tm-streak.at-risk{border-style:dashed;}
 
   /* ---------- PDF viewer (full-screen, in-app) ---------- */
   .pdf-modal{
@@ -2541,6 +2545,25 @@
     return { short: s.short, color: (course && course.color) || s.color };
   }
   function startOfDay(ts){ var d = new Date(ts); d.setHours(0,0,0,0); return d.getTime(); }
+  // Consecutive-day study streak. `current` counts back from today (or from
+  // yesterday if nothing is logged yet today, so a streak isn't shown as broken
+  // until you actually miss a whole day); `longest` is the best run ever.
+  function studyStreaks(){
+    var DAY = 86400000, daySet = {};
+    STUDY_LOG.forEach(function(s){ daySet[startOfDay(s.ts)] = true; });
+    var days = Object.keys(daySet).map(Number).sort(function(a,b){ return a-b; });
+    if (!days.length) return { current: 0, longest: 0 };
+    var longest = 1, run = 1;
+    for (var i=1; i<days.length; i++){
+      run = (days[i] - days[i-1] === DAY) ? run+1 : 1;
+      if (run > longest) longest = run;
+    }
+    var today = startOfDay(Date.now());
+    var anchor = daySet[today] ? today : (daySet[today-DAY] ? today-DAY : null);
+    var current = 0;
+    for (var d = anchor; d !== null && daySet[d]; d -= DAY){ current++; }
+    return { current: current, longest: longest };
+  }
 
   function renderTimer(){
     var subs = activeSubjects();
@@ -2604,9 +2627,14 @@
     var weekTotal = recent.reduce(function(a,s){ return a + (Number(s.minutes)||0); }, 0);
     var allTimeTotal = STUDY_LOG.reduce(function(a,s){ return a + (Number(s.minutes)||0); }, 0);
     var sessionCount = recent.length;
+    var streak = studyStreaks();
+    var streakActiveToday = STUDY_LOG.some(function(s){ return startOfDay(s.ts)===todayStart; });
 
     var statCards =
       '<div class="grade-summary">' +
+        '<div class="gs-stat tm-streak' + (streak.current>0 ? (streakActiveToday?' lit':' at-risk') : '') + '">' +
+          '<span class="gs-num"><span class="tm-flame">🔥</span>' + streak.current + '</span>' +
+          '<span class="gs-label">Day streak' + (streak.current>0 && !streakActiveToday ? ' · study today to keep it' : (streak.longest>1 ? ' · best ' + streak.longest : '')) + '</span></div>' +
         '<div class="gs-stat"><span class="gs-num">' + fmtHrsMin(weekTotal) + '</span><span class="gs-label">Last 7 days</span></div>' +
         '<div class="gs-stat"><span class="gs-num">' + sessionCount + '</span><span class="gs-label">Sessions this week</span></div>' +
         '<div class="gs-stat"><span class="gs-num">' + fmtHrsMin(allTimeTotal) + '</span><span class="gs-label">All-time focus</span></div>' +
