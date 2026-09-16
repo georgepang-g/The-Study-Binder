@@ -9,6 +9,8 @@ files for each subject, with SL/HL levels and deadlines.
 - **Grades** — log assessment scores per subject, see each subject's average and
   a trend sparkline, set a predicted 1–7 grade, and track your predicted total /45
   (plus TOK/EE core points).
+- **Flashcards** — build revision decks per subject and study them in a flip-card
+  mode ("Got it" / "Again" re-queues cards until you know them all).
 - **Calendar** view of every deadline, and a **search** bar across all notes,
   tasks, projects, exam items, and files.
 - Four sections per subject: **Notes, Tasks, Projects, and Exam prep** (past papers).

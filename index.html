@@ -699,6 +699,50 @@
   html.theme-dark .grade-add input{background:#171C21;}
   @media (max-width:760px){ .grade-add .ga-title{min-width:100%;} }
 
+  /* ---------- Flashcards ---------- */
+  .deck-create{display:flex; gap:8px; flex-wrap:wrap; margin-bottom:18px;}
+  .deck-create .deck-name-input{flex:1; min-width:180px; font-family:inherit; font-size:14px; padding:9px 11px; border:1px solid var(--rule); border-radius:8px; background:var(--card); color:var(--ink);}
+  .deck-create select{font-family:inherit; font-size:14px; padding:9px 10px; border:1px solid var(--rule); border-radius:8px; background:var(--card); color:var(--ink);}
+  .deck-list{display:flex; flex-direction:column; gap:10px;}
+  .deck-card{display:flex; align-items:center; gap:11px; background:var(--card); border:1px solid var(--rule); border-left:3px solid var(--accent,#999); border-radius:9px; padding:12px 14px;}
+  .deck-flag{width:9px; height:9px; border-radius:2px; flex-shrink:0;}
+  .deck-main{flex:1; min-width:0;}
+  .deck-name{font-size:15px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .deck-sub{font-size:12px; color:var(--ink-soft); margin-top:1px;}
+  .deck-study{background:var(--accent,#333); color:#fff; border:none; border-radius:7px; padding:7px 14px; font-size:13px; font-weight:500; cursor:pointer;}
+  .deck-study:hover{opacity:.92;}
+  .deck-open{background:transparent; border:1px solid var(--rule); color:var(--ink); border-radius:7px; padding:7px 12px; font-size:13px; cursor:pointer;}
+  .deck-open:hover{border-color:var(--ink-soft);}
+  .fc-rows{display:flex; flex-direction:column; gap:8px; margin-bottom:16px;}
+  .fc-row{display:flex; align-items:stretch; gap:10px; background:var(--card); border:1px solid var(--rule); border-radius:8px; padding:10px 12px;}
+  .fc-cell{flex:1; min-width:0; font-size:13.5px; color:var(--ink); white-space:pre-wrap; word-break:break-word;}
+  .fc-side{display:block; font-size:10px; text-transform:uppercase; letter-spacing:0.05em; color:var(--ink-soft); margin-bottom:2px;}
+  .fc-add{display:flex; gap:8px; flex-wrap:wrap; align-items:flex-start;}
+  .fc-input{flex:1; min-width:160px; font-family:inherit; font-size:13.5px; padding:9px 11px; border:1px solid var(--rule); border-radius:8px; background:var(--card); color:var(--ink); resize:vertical; min-height:48px;}
+  .fc-progress{height:5px; background:rgba(128,128,128,0.16); border-radius:3px; overflow:hidden; margin-bottom:20px;}
+  .fc-progress-fill{height:100%; border-radius:3px; transition:width .3s ease;}
+  .fc-study{max-width:560px; margin:0 auto;}
+  .fc-card{
+    width:100%; min-height:230px; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    gap:14px; text-align:center; cursor:pointer; padding:28px 24px;
+    background:var(--card); border:1px solid var(--rule); border-top:4px solid var(--accent,#999);
+    border-radius:14px; box-shadow:0 4px 16px rgba(0,0,0,0.06); color:var(--ink); font-family:inherit;
+  }
+  .fc-card .fc-face{font-size:20px; font-weight:600; line-height:1.4; white-space:pre-wrap; word-break:break-word;}
+  .fc-card.flipped .fc-face{font-weight:500;}
+  .fc-card .fc-hint{font-size:12px; color:var(--ink-soft);}
+  .fc-actions{display:flex; gap:12px; margin-top:16px; justify-content:center;}
+  .fc-actions button{padding:12px 26px; border-radius:9px; font-size:15px; font-weight:600; cursor:pointer; border:1px solid var(--rule); font-family:inherit;}
+  .fc-again{background:transparent; color:var(--ink);}
+  .fc-again:hover{border-color:var(--ink-soft);}
+  .fc-got{background:var(--accent,var(--ink)); border-color:var(--accent,var(--ink)); color:#fff;}
+  .fc-done{max-width:460px; margin:40px auto 0; text-align:center;}
+  .fc-done-emoji{font-size:44px;}
+  .fc-done h3{font-size:22px; margin:8px 0 4px;}
+  .fc-done p{color:var(--ink-soft); font-size:14px;}
+  .fc-done-actions{display:flex; gap:12px; justify-content:center; margin-top:18px;}
+  html.theme-dark .fc-input, html.theme-dark .deck-create .deck-name-input, html.theme-dark .deck-create select{background:#171C21;}
+
   /* ---------- PDF viewer (full-screen, in-app) ---------- */
   .pdf-modal{
     position:fixed; inset:0; background:rgba(0,0,0,0.9); z-index:80;
@@ -978,6 +1022,7 @@
   var MY_COURSES = [];      // [{ subjectId, level, color?, predicted? }] — the person's course list
   var FILES = [];           // lightweight PDF metadata: [{ id, subject, name, size, level, createdAt }]
   var GRADES = [];          // assessment scores: [{ id, subject, title, score, outOf, date, createdAt }]
+  var DECKS = [];           // flashcard decks: [{ id, subject, name, createdAt, cards:[{id,front,back}] }]
   var SETTINGS = { theme:'paper', sortBy:'catalog', hideCompleted:false, corePoints:0 };
   var currentView = 'overview';
   var levelFilter = 'All';
@@ -985,6 +1030,8 @@
   var searchQuery = '';
   var calMonth = null;   // Date pinned to the 1st of the displayed month (lazy-init)
   var editingId = null;  // id of the entry currently being edited inline
+  var fcDeckId = null;   // open flashcard deck id (null = deck list)
+  var fcStudy = null;    // active study session: { deckId, queue:[cardIds], flipped, total, got }
 
   // Firestore caps a single document at ~1MB, so a PDF is base64-encoded and
   // split into chunk documents (binders/{uid}/files/{id}_c{n}). The metadata in
@@ -1119,6 +1166,7 @@
         courses: MY_COURSES,
         files: FILES,
         grades: GRADES,
+        decks: DECKS,
         settings: SETTINGS,
         updatedAt: serverTimestamp()
       }, { merge: true });
@@ -1146,9 +1194,10 @@
         MY_COURSES= Array.isArray(d.courses)   ? d.courses   : [];
         FILES     = Array.isArray(d.files)     ? d.files     : [];
         GRADES    = Array.isArray(d.grades)    ? d.grades    : [];
+        DECKS     = Array.isArray(d.decks)     ? d.decks     : [];
         SETTINGS  = normalizeSettings(d.settings);
       } else {
-        ENTRIES = []; DISMISSED = []; MY_COURSES = []; FILES = []; GRADES = [];
+        ENTRIES = []; DISMISSED = []; MY_COURSES = []; FILES = []; GRADES = []; DECKS = [];
         SETTINGS = normalizeSettings(null);
       }
       applyTheme();
@@ -1610,23 +1659,86 @@
     '</svg>';
   }
 
+  /* ---------------- Flashcards ---------------- */
+  function shuffle(arr){
+    for (var i=arr.length-1; i>0; i--){
+      var j = Math.floor(Math.random() * (i+1));
+      var t = arr[i]; arr[i] = arr[j]; arr[j] = t;
+    }
+    return arr;
+  }
+  function deckById(id){ return DECKS.find(function(d){ return d.id===id; }); }
+  function createDeck(subject, name){
+    name = (name||'').trim();
+    if (!name) return false;
+    var deck = { id: uid('deck'), subject: subject || null, name: name, createdAt: Date.now(), cards: [] };
+    DECKS.push(deck);
+    fcDeckId = deck.id; fcStudy = null;
+    saveData();
+    renderPage();
+    return true;
+  }
+  function deleteDeck(id){
+    var deck = deckById(id);
+    if (deck && !confirm('Delete the deck “' + deck.name + '” and all its cards?')) return;
+    DECKS = DECKS.filter(function(d){ return d.id!==id; });
+    if (fcDeckId===id){ fcDeckId = null; fcStudy = null; }
+    saveData();
+    renderPage();
+  }
+  function addCard(deckId, front, back){
+    var deck = deckById(deckId); if (!deck) return false;
+    front = (front||'').trim(); back = (back||'').trim();
+    if (!front || !back) return false;
+    if (!Array.isArray(deck.cards)) deck.cards = [];
+    deck.cards.push({ id: uid('card'), front: front, back: back });
+    saveData();
+    renderPage();
+    return true;
+  }
+  function deleteCard(deckId, cardId){
+    var deck = deckById(deckId); if (!deck) return;
+    deck.cards = (deck.cards||[]).filter(function(c){ return c.id!==cardId; });
+    saveData();
+    renderPage();
+  }
+  function openDeck(id){ fcDeckId = id; fcStudy = null; renderPage(); }
+  function closeDeck(){ fcDeckId = null; fcStudy = null; renderPage(); }
+  function startStudy(deckId){
+    var deck = deckById(deckId);
+    if (!deck || !(deck.cards||[]).length) return;
+    fcStudy = { deckId: deckId, queue: shuffle(deck.cards.map(function(c){ return c.id; })), flipped: false, total: deck.cards.length, got: 0 };
+    fcDeckId = deckId;
+    renderPage();
+  }
+  function fcFlip(){ if (fcStudy){ fcStudy.flipped = true; renderPage(); } }
+  function fcMark(known){
+    if (!fcStudy || !fcStudy.queue.length) return;
+    var id = fcStudy.queue.shift();
+    if (known){ fcStudy.got++; } else { fcStudy.queue.push(id); }   // "again" re-queues at the back
+    fcStudy.flipped = false;
+    renderPage();
+  }
+  function endStudy(){ fcStudy = null; renderPage(); }
+
   /* ---------------- Nav ---------------- */
   function renderNav(){
     var ul = document.getElementById('spineNav');
     var html = '';
-    html += navItem('overview', 'Overview', 'All courses', '#8A8378', 0);
-    html += navItem('calendar', 'Calendar', 'Deadlines', '#8A8378', 1);
-    html += navItem('grades',   'Grades',   'Scores & predicted', '#8A8378', 2);
-    html += navItem('search',   'Search',   'Find anything', '#8A8378', 3);
+    html += navItem('overview',   'Overview', 'All courses', '#8A8378', 0);
+    html += navItem('calendar',   'Calendar', 'Deadlines', '#8A8378', 1);
+    html += navItem('grades',     'Grades',   'Scores & predicted', '#8A8378', 2);
+    html += navItem('flashcards', 'Flashcards', 'Revision decks', '#8A8378', 3);
+    html += navItem('search',     'Search',   'Find anything', '#8A8378', 4);
     var subs = activeSubjects();
     subs.forEach(function(s, i){
-      html += navItem(s.id, s.short, s.myLevel, s.color, i+4);
+      html += navItem(s.id, s.short, s.myLevel, s.color, i+5);
     });
-    html += '<li><button class="tab manage-tab' + (currentView==='courseSetup'?' active':'') + '" id="navManageCourses" style="--i:' + (subs.length+4) + '">' +
+    html += '<li><button class="tab manage-tab' + (currentView==='courseSetup'?' active':'') + '" id="navManageCourses" style="--i:' + (subs.length+5) + '">' +
       '<span class="flag" style="--flag-color:#8A8378"></span>' +
       '<span class="tab-name">Manage courses<span class="tab-sub">Add or edit</span></span>' +
       '</button></li>';
-    html += '<li><button class="tab' + (currentView==='settings'?' active':'') + '" id="navSettings" style="--i:' + (subs.length+5) + '">' +
+    html += '<li><button class="tab' + (currentView==='settings'?' active':'') + '" id="navSettings" style="--i:' + (subs.length+6) + '">' +
       '<span class="flag" style="--flag-color:#8A8378"></span>' +
       '<span class="tab-name">Settings<span class="tab-sub">Theme &amp; sorting</span></span>' +
       '</button></li>';
@@ -1655,6 +1767,7 @@
     levelFilter = 'All';
     quickAddOpen = false;
     editingId = null;
+    fcDeckId = null; fcStudy = null;
     document.querySelectorAll('#spineNav .tab').forEach(function(btn){
       btn.classList.toggle('active', btn.getAttribute('data-view')===view);
     });
@@ -1674,6 +1787,8 @@
       page.innerHTML = renderCalendar();
     } else if (currentView === 'grades'){
       page.innerHTML = renderGrades();
+    } else if (currentView === 'flashcards'){
+      page.innerHTML = renderFlashcards();
     } else if (currentView === 'search'){
       page.innerHTML = renderSearch();
     } else {
@@ -2158,6 +2273,118 @@
     );
   }
 
+  /* ---------------- Flashcards ---------------- */
+  function renderFlashcards(){
+    if (fcStudy) return renderStudy();
+    if (fcDeckId) return renderDeckManage();
+    return renderDeckList();
+  }
+  function renderDeckList(){
+    var subs = activeSubjects();
+    var subjOpts = '<option value="">No subject</option>' + subs.map(function(s){
+      return '<option value="' + s.id + '">' + escapeHtml(s.short) + '</option>';
+    }).join('');
+    var list = DECKS.length ? DECKS.slice().sort(function(a,b){ return b.createdAt-a.createdAt; }).map(function(d){
+      var subj = subs.find(function(s){ return s.id===d.subject; });
+      var color = subj ? subj.color : '#8A8378';
+      var n = (d.cards||[]).length;
+      return '<div class="deck-card" style="--accent:' + color + '">' +
+        '<span class="deck-flag" style="background:' + color + '"></span>' +
+        '<div class="deck-main"><div class="deck-name">' + escapeHtml(d.name) + '</div>' +
+          '<div class="deck-sub">' + (subj?escapeHtml(subj.short)+' · ':'') + n + ' card' + (n===1?'':'s') + '</div></div>' +
+        (n ? '<button class="deck-study" data-studydeck="' + d.id + '" style="--accent:' + color + '">Study</button>' : '') +
+        '<button class="deck-open" data-opendeck="' + d.id + '">Open</button>' +
+        '<button class="del" data-deldeck="' + d.id + '" title="Delete deck">×</button>' +
+      '</div>';
+    }).join('') : '<div class="empty">No decks yet. Create one above to start making flashcards.</div>';
+    return (
+      '<div class="page-header" style="--accent:#20262B">' +
+        '<div><h2>Flashcards</h2><p class="kicker">Build decks and revise with flip cards</p></div>' +
+      '</div>' +
+      '<div class="deck-create">' +
+        '<input type="text" id="deckName" class="deck-name-input" placeholder="New deck name (e.g. Organic reactions)" />' +
+        '<select id="deckSubject">' + subjOpts + '</select>' +
+        '<button type="button" id="deckCreateBtn" class="ga-add" style="--accent:#20262B">Create deck</button>' +
+      '</div>' +
+      '<div class="deck-list">' + list + '</div>'
+    );
+  }
+  function renderDeckManage(){
+    var deck = deckById(fcDeckId);
+    if (!deck){ fcDeckId = null; return renderDeckList(); }
+    var subj = activeSubjects().find(function(s){ return s.id===deck.subject; });
+    var color = subj ? subj.color : '#8A8378';
+    var cards = deck.cards || [];
+    var rows = cards.length ? cards.map(function(c){
+      return '<div class="fc-row">' +
+        '<div class="fc-cell"><span class="fc-side">Front</span>' + escapeHtml(c.front) + '</div>' +
+        '<div class="fc-cell"><span class="fc-side">Back</span>' + escapeHtml(c.back) + '</div>' +
+        '<button class="del" data-delcard="' + c.id + '" title="Remove card">×</button>' +
+      '</div>';
+    }).join('') : '<div class="empty">No cards yet. Add your first one below.</div>';
+    return (
+      '<div class="page-header" style="--accent:' + color + '">' +
+        '<div><h2>' + escapeHtml(deck.name) + '</h2><p class="kicker">' + (subj?escapeHtml(subj.short)+' · ':'') + cards.length + ' card' + (cards.length===1?'':'s') + '</p></div>' +
+        '<div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">' +
+          '<button class="cal-btn" id="fcBackBtn">← Decks</button>' +
+          (cards.length ? '<button class="add-toggle" id="fcStudyBtn" style="--accent:' + color + '">Study (' + cards.length + ')</button>' : '') +
+        '</div>' +
+      '</div>' +
+      '<div class="fc-rows">' + rows + '</div>' +
+      '<div class="fc-add">' +
+        '<textarea id="cardFront" class="fc-input" placeholder="Front — question / term"></textarea>' +
+        '<textarea id="cardBack" class="fc-input" placeholder="Back — answer / definition"></textarea>' +
+        '<button type="button" id="cardAddBtn" class="ga-add" style="--accent:' + color + '">Add card</button>' +
+      '</div>'
+    );
+  }
+  function renderStudy(){
+    var deck = deckById(fcStudy.deckId);
+    if (!deck){ fcStudy = null; fcDeckId = null; return renderDeckList(); }
+    var subj = activeSubjects().find(function(s){ return s.id===deck.subject; });
+    var color = subj ? subj.color : '#8A8378';
+
+    if (!fcStudy.queue.length){
+      return (
+        '<div class="page-header" style="--accent:' + color + '"><div><h2>' + escapeHtml(deck.name) + '</h2><p class="kicker">Study session</p></div></div>' +
+        '<div class="fc-done">' +
+          '<div class="fc-done-emoji">🎉</div>' +
+          '<h3>All done!</h3>' +
+          '<p>You got through all ' + fcStudy.total + ' card' + (fcStudy.total===1?'':'s') + '.</p>' +
+          '<div class="fc-done-actions">' +
+            '<button class="cal-btn" id="fcBackBtn">Back to deck</button>' +
+            '<button class="add-toggle" id="fcAgainBtn" style="--accent:' + color + '">Study again</button>' +
+          '</div>' +
+        '</div>'
+      );
+    }
+    var card = cards0(deck);
+    if (!card){ fcStudy.queue.shift(); return renderStudy(); }   // card deleted mid-session
+    var pct = fcStudy.total ? Math.round((fcStudy.got/fcStudy.total)*100) : 0;
+    return (
+      '<div class="page-header" style="--accent:' + color + '">' +
+        '<div><h2>' + escapeHtml(deck.name) + '</h2><p class="kicker">' + fcStudy.got + ' / ' + fcStudy.total + ' done · ' + fcStudy.queue.length + ' left</p></div>' +
+        '<button class="cal-btn" id="fcBackBtn">End</button>' +
+      '</div>' +
+      '<div class="fc-progress"><div class="fc-progress-fill" style="width:' + pct + '%; background:' + color + '"></div></div>' +
+      '<div class="fc-study">' +
+        '<button class="fc-card' + (fcStudy.flipped?' flipped':'') + '" id="fcCard" style="--accent:' + color + '">' +
+          '<span class="fc-face">' + escapeHtml(fcStudy.flipped ? card.back : card.front) + '</span>' +
+          '<span class="fc-hint">' + (fcStudy.flipped ? 'Answer' : 'Tap to reveal answer') + '</span>' +
+        '</button>' +
+        (fcStudy.flipped ?
+          '<div class="fc-actions">' +
+            '<button class="fc-again" data-fcmark="again">Again</button>' +
+            '<button class="fc-got" data-fcmark="known" style="--accent:' + color + '">Got it</button>' +
+          '</div>' : '') +
+      '</div>'
+    );
+  }
+  function cards0(deck){
+    var id = fcStudy.queue[0];
+    return (deck.cards||[]).find(function(c){ return c.id===id; });
+  }
+
   function renderQuickAdd(defaultSubject, defaultLevel, accent){
     var subjOptions = activeSubjects().map(function(s){
       return '<option value="' + s.id + '"' + (s.id===defaultSubject?' selected':'') + '>' + s.short + '</option>';
@@ -2350,6 +2577,33 @@
         if (inp){ inp.addEventListener('keydown', function(e){ if (e.key==='Enter'){ submit(); } }); }
       });
     });
+
+    // Flashcards
+    var deckCreateBtn = document.getElementById('deckCreateBtn');
+    if (deckCreateBtn){ deckCreateBtn.addEventListener('click', function(){
+      var name = document.getElementById('deckName'), subj = document.getElementById('deckSubject');
+      if (!createDeck(subj ? subj.value : '', name ? name.value : '')){ if (name){ name.focus(); } }
+    }); }
+    var deckNameInp = document.getElementById('deckName');
+    if (deckNameInp){ deckNameInp.addEventListener('keydown', function(e){ if (e.key==='Enter'){ document.getElementById('deckCreateBtn').click(); } }); }
+    document.querySelectorAll('[data-opendeck]').forEach(function(b){ b.addEventListener('click', function(){ openDeck(b.getAttribute('data-opendeck')); }); });
+    document.querySelectorAll('[data-studydeck]').forEach(function(b){ b.addEventListener('click', function(){ startStudy(b.getAttribute('data-studydeck')); }); });
+    document.querySelectorAll('[data-deldeck]').forEach(function(b){ b.addEventListener('click', function(){ deleteDeck(b.getAttribute('data-deldeck')); }); });
+    var fcBackBtn = document.getElementById('fcBackBtn');
+    if (fcBackBtn){ fcBackBtn.addEventListener('click', function(){ if (fcStudy){ endStudy(); } else { closeDeck(); } }); }
+    var fcStudyBtn = document.getElementById('fcStudyBtn');
+    if (fcStudyBtn){ fcStudyBtn.addEventListener('click', function(){ startStudy(fcDeckId); }); }
+    var cardAddBtn = document.getElementById('cardAddBtn');
+    if (cardAddBtn){ cardAddBtn.addEventListener('click', function(){
+      var f = document.getElementById('cardFront'), b = document.getElementById('cardBack');
+      if (!addCard(fcDeckId, f ? f.value : '', b ? b.value : '')){ if (f && !f.value.trim()){ f.focus(); } else if (b){ b.focus(); } }
+    }); }
+    document.querySelectorAll('[data-delcard]').forEach(function(b){ b.addEventListener('click', function(){ deleteCard(fcDeckId, b.getAttribute('data-delcard')); }); });
+    var fcCard = document.getElementById('fcCard');
+    if (fcCard){ fcCard.addEventListener('click', function(){ if (fcStudy && !fcStudy.flipped){ fcFlip(); } }); }
+    document.querySelectorAll('[data-fcmark]').forEach(function(b){ b.addEventListener('click', function(){ fcMark(b.getAttribute('data-fcmark')==='known'); }); });
+    var fcAgainBtn = document.getElementById('fcAgainBtn');
+    if (fcAgainBtn){ fcAgainBtn.addEventListener('click', function(){ startStudy(fcStudy ? fcStudy.deckId : fcDeckId); }); }
 
     // Add toggle
     var addBtn = document.getElementById('addToggleBtn');
@@ -3018,8 +3272,9 @@
         // Fully reset in-memory state so nothing leaks to the next account.
         if (unsubscribeBinder){ unsubscribeBinder(); unsubscribeBinder = null; }
         binderRef = null; firstSnapshot = true;
-        ENTRIES = []; DISMISSED = []; MY_COURSES = []; FILES = []; GRADES = [];
+        ENTRIES = []; DISMISSED = []; MY_COURSES = []; FILES = []; GRADES = []; DECKS = [];
         SETTINGS = normalizeSettings(null); applyTheme();
+        fcDeckId = null; fcStudy = null;
         currentView = 'overview'; quickAddOpen = false;
         setMsg('');
         showGate();
