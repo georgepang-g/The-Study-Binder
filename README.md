@@ -6,6 +6,9 @@ files for each subject, with SL/HL levels and deadlines.
 **Features**
 - **Installable app (PWA)** — add it to your home screen for a real app icon,
   full-screen launch, and an offline app-shell.
+- **Grades** — log assessment scores per subject, see each subject's average and
+  a trend sparkline, set a predicted 1–7 grade, and track your predicted total /45
+  (plus TOK/EE core points).
 - **Calendar** view of every deadline, and a **search** bar across all notes,
   tasks, projects, exam items, and files.
 - Four sections per subject: **Notes, Tasks, Projects, and Exam prep** (past papers).
