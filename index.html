@@ -743,6 +743,71 @@
   .fc-done-actions{display:flex; gap:12px; justify-content:center; margin-top:18px;}
   html.theme-dark .fc-input, html.theme-dark .deck-create .deck-name-input, html.theme-dark .deck-create select{background:#171C21;}
 
+  /* ---------- Study timer ---------- */
+  .timer-card{
+    background:var(--card); border:1px solid var(--rule); border-radius:16px;
+    padding:20px 18px 22px; margin-bottom:22px;
+    display:flex; flex-direction:column; align-items:center; gap:6px;
+  }
+  .tm-controls-top{display:flex; flex-wrap:wrap; gap:14px; justify-content:center; align-items:flex-end; width:100%;}
+  .tm-subj{display:flex; flex-direction:column; gap:4px; font-size:12px; color:var(--ink-soft); font-weight:600;}
+  .tm-subj select{
+    font:inherit; font-size:14px; color:var(--ink); background:transparent;
+    border:1px solid var(--rule); border-radius:8px; padding:7px 10px; min-width:150px;
+  }
+  .tm-presets{display:flex; align-items:center; gap:6px;}
+  .tm-preset{
+    font:inherit; font-size:13px; color:var(--ink); background:transparent;
+    border:1px solid var(--rule); border-radius:8px; padding:7px 11px; cursor:pointer;
+  }
+  .tm-preset.active{background:var(--ink); color:var(--card); border-color:var(--ink);}
+  .tm-preset:disabled{opacity:.5; cursor:default;}
+  .tm-custom{
+    font:inherit; font-size:13px; width:64px; color:var(--ink); background:transparent;
+    border:1px solid var(--rule); border-radius:8px; padding:7px 8px;
+  }
+  .tm-ring{
+    --frac:0; width:230px; height:230px; border-radius:50%; margin:12px auto 6px;
+    background:conic-gradient(var(--ring) calc(var(--frac) * 360deg), rgba(128,128,128,0.16) 0);
+    display:flex; align-items:center; justify-content:center; transition:background .35s linear;
+  }
+  .tm-ring-inner{
+    width:182px; height:182px; border-radius:50%; background:var(--card);
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px;
+    box-shadow:inset 0 0 0 1px var(--rule);
+  }
+  .tm-display{font-family:'Fraunces',Georgia,serif; font-size:46px; font-weight:600; color:var(--ink); line-height:1; font-variant-numeric:tabular-nums;}
+  .tm-state{font-size:12px; color:var(--ink-soft); text-transform:uppercase; letter-spacing:.08em;}
+  .tm-logged{font-size:13px; color:var(--ink-soft); font-weight:600;}
+  .tm-buttons{display:flex; gap:10px; margin-top:8px;}
+  .tm-go{
+    font:inherit; font-size:15px; font-weight:600; color:#fff; background:var(--accent);
+    border:none; border-radius:10px; padding:11px 30px; cursor:pointer;
+  }
+  .tm-reset{
+    font:inherit; font-size:15px; color:var(--ink); background:transparent;
+    border:1px solid var(--rule); border-radius:10px; padding:11px 20px; cursor:pointer;
+  }
+  .tm-manual{margin-bottom:22px;}
+  .ml-subject{
+    font:inherit; font-size:14px; color:var(--ink); background:transparent;
+    border:1px solid var(--rule); border-radius:8px; padding:8px 10px;
+  }
+  .ml-min{
+    font:inherit; font-size:14px; width:110px; color:var(--ink); background:transparent;
+    border:1px solid var(--rule); border-radius:8px; padding:8px 10px;
+  }
+  .tm-days{display:flex; gap:6px; align-items:flex-end; padding-top:6px;}
+  .tm-day{flex:1; display:flex; flex-direction:column; align-items:center; gap:4px; min-width:0;}
+  .tm-day-track{width:100%; max-width:34px; height:92px; background:rgba(128,128,128,0.10); border-radius:6px; display:flex; align-items:flex-end; overflow:hidden;}
+  .tm-day-fill{width:100%; border-radius:6px 6px 0 0; background:var(--ink); opacity:.82; transition:height .3s ease;}
+  .tm-day.is-today .tm-day-label{color:var(--ink); font-weight:700;}
+  .tm-day-min{font-size:11px; color:var(--ink-soft); min-height:14px; font-variant-numeric:tabular-nums;}
+  .tm-day-label{font-size:11px; color:var(--ink-soft);}
+  html.theme-dark .tm-subj select, html.theme-dark .tm-custom,
+  html.theme-dark .ml-subject, html.theme-dark .ml-min{background:#171C21;}
+  html.theme-dark .tm-preset.active{color:var(--card);}
+
   /* ---------- PDF viewer (full-screen, in-app) ---------- */
   .pdf-modal{
     position:fixed; inset:0; background:rgba(0,0,0,0.9); z-index:80;
@@ -1023,7 +1088,9 @@
   var FILES = [];           // lightweight PDF metadata: [{ id, subject, name, size, level, createdAt }]
   var GRADES = [];          // assessment scores: [{ id, subject, title, score, outOf, date, createdAt }]
   var DECKS = [];           // flashcard decks: [{ id, subject, name, createdAt, cards:[{id,front,back}] }]
+  var STUDY_LOG = [];       // focus sessions: [{ id, subject, minutes, ts }]
   var SETTINGS = { theme:'paper', sortBy:'catalog', hideCompleted:false, corePoints:0 };
+  var timer = { subject:'', durationMin:25, duration:25*60, remaining:25*60, running:false, tick:null, justLogged:0 };
   var currentView = 'overview';
   var levelFilter = 'All';
   var quickAddOpen = false;
@@ -1167,6 +1234,7 @@
         files: FILES,
         grades: GRADES,
         decks: DECKS,
+        study: STUDY_LOG,
         settings: SETTINGS,
         updatedAt: serverTimestamp()
       }, { merge: true });
@@ -1195,9 +1263,10 @@
         FILES     = Array.isArray(d.files)     ? d.files     : [];
         GRADES    = Array.isArray(d.grades)    ? d.grades    : [];
         DECKS     = Array.isArray(d.decks)     ? d.decks     : [];
+        STUDY_LOG = Array.isArray(d.study)     ? d.study     : [];
         SETTINGS  = normalizeSettings(d.settings);
       } else {
-        ENTRIES = []; DISMISSED = []; MY_COURSES = []; FILES = []; GRADES = []; DECKS = [];
+        ENTRIES = []; DISMISSED = []; MY_COURSES = []; FILES = []; GRADES = []; DECKS = []; STUDY_LOG = [];
         SETTINGS = normalizeSettings(null);
       }
       applyTheme();
@@ -1721,6 +1790,80 @@
   }
   function endStudy(){ fcStudy = null; renderPage(); }
 
+  /* ---------------- Study timer ---------------- */
+  function fmtClock(sec){
+    sec = Math.max(0, Math.round(sec));
+    var m = Math.floor(sec/60), s = sec%60;
+    return m + ':' + (s<10 ? '0'+s : s);
+  }
+  function timerSetSubject(id){ timer.subject = id || ''; if (currentView==='timer') renderPage(); }
+  function timerSetDuration(min){
+    var n = parseInt(min, 10);
+    if (isNaN(n) || n < 1) return;
+    if (n > 180) n = 180;
+    if (timer.running) timerPause();
+    timer.durationMin = n;
+    timer.duration = n*60;
+    timer.remaining = n*60;
+    if (currentView==='timer') renderPage();
+  }
+  function timerStart(){
+    if (timer.running) return;
+    if (timer.remaining <= 0) timer.remaining = timer.duration;   // restart a finished timer
+    timer.running = true;
+    timer.justLogged = 0;
+    if (timer.tick) clearInterval(timer.tick);
+    timer.tick = setInterval(timerTick, 1000);
+    if (currentView==='timer') renderPage();
+  }
+  function timerPause(){
+    timer.running = false;
+    if (timer.tick){ clearInterval(timer.tick); timer.tick = null; }
+    if (currentView==='timer') renderPage();
+  }
+  function timerToggle(){ if (timer.running) timerPause(); else timerStart(); }
+  function timerReset(){
+    timer.running = false;
+    if (timer.tick){ clearInterval(timer.tick); timer.tick = null; }
+    timer.remaining = timer.duration;
+    timer.justLogged = 0;
+    if (currentView==='timer') renderPage();
+  }
+  // Ticks every second while running. Updates the DOM directly (not a full
+  // re-render) so the interval and its closure survive across nav and renders.
+  function timerTick(){
+    timer.remaining--;
+    if (timer.remaining <= 0){ timerComplete(); return; }
+    var disp = document.getElementById('timerDisplay');
+    if (disp) disp.textContent = fmtClock(timer.remaining);
+    var ring = document.getElementById('timerRing');
+    if (ring) ring.style.setProperty('--frac', ((timer.duration - timer.remaining) / timer.duration).toFixed(4));
+  }
+  function timerComplete(){
+    if (timer.tick){ clearInterval(timer.tick); timer.tick = null; }
+    timer.running = false;
+    timer.remaining = 0;
+    addStudyLog(timer.subject, timer.durationMin, true);   // logs + persists
+    timer.justLogged = timer.durationMin;
+    timer.remaining = timer.duration;                      // reset ready for the next session
+    if (currentView==='timer') renderPage();
+  }
+  function addStudyLog(subject, minutes, silent){
+    var n = Number(minutes);
+    if (isNaN(n) || n <= 0) return false;
+    n = Math.round(n);
+    if (n > 600) n = 600;
+    STUDY_LOG.push({ id: uid('study'), subject: subject || '', minutes: n, ts: Date.now() });
+    saveData();
+    if (!silent && currentView==='timer') renderPage();
+    return true;
+  }
+  function deleteStudyLog(id){
+    STUDY_LOG = STUDY_LOG.filter(function(s){ return s.id!==id; });
+    saveData();
+    if (currentView==='timer') renderPage();
+  }
+
   /* ---------------- Nav ---------------- */
   function renderNav(){
     var ul = document.getElementById('spineNav');
@@ -1729,16 +1872,17 @@
     html += navItem('calendar',   'Calendar', 'Deadlines', '#8A8378', 1);
     html += navItem('grades',     'Grades',   'Scores & predicted', '#8A8378', 2);
     html += navItem('flashcards', 'Flashcards', 'Revision decks', '#8A8378', 3);
-    html += navItem('search',     'Search',   'Find anything', '#8A8378', 4);
+    html += navItem('timer',      'Timer',    'Focus &amp; stats', '#8A8378', 4);
+    html += navItem('search',     'Search',   'Find anything', '#8A8378', 5);
     var subs = activeSubjects();
     subs.forEach(function(s, i){
-      html += navItem(s.id, s.short, s.myLevel, s.color, i+5);
+      html += navItem(s.id, s.short, s.myLevel, s.color, i+6);
     });
-    html += '<li><button class="tab manage-tab' + (currentView==='courseSetup'?' active':'') + '" id="navManageCourses" style="--i:' + (subs.length+5) + '">' +
+    html += '<li><button class="tab manage-tab' + (currentView==='courseSetup'?' active':'') + '" id="navManageCourses" style="--i:' + (subs.length+6) + '">' +
       '<span class="flag" style="--flag-color:#8A8378"></span>' +
       '<span class="tab-name">Manage courses<span class="tab-sub">Add or edit</span></span>' +
       '</button></li>';
-    html += '<li><button class="tab' + (currentView==='settings'?' active':'') + '" id="navSettings" style="--i:' + (subs.length+6) + '">' +
+    html += '<li><button class="tab' + (currentView==='settings'?' active':'') + '" id="navSettings" style="--i:' + (subs.length+7) + '">' +
       '<span class="flag" style="--flag-color:#8A8378"></span>' +
       '<span class="tab-name">Settings<span class="tab-sub">Theme &amp; sorting</span></span>' +
       '</button></li>';
@@ -1789,6 +1933,8 @@
       page.innerHTML = renderGrades();
     } else if (currentView === 'flashcards'){
       page.innerHTML = renderFlashcards();
+    } else if (currentView === 'timer'){
+      page.innerHTML = renderTimer();
     } else if (currentView === 'search'){
       page.innerHTML = renderSearch();
     } else {
@@ -2385,6 +2531,157 @@
     return (deck.cards||[]).find(function(c){ return c.id===id; });
   }
 
+  /* ---------------- Study timer + stats ---------------- */
+  // Look up a subject's short name and accent from its id (STUDY_LOG can
+  // reference subjects the person later dropped, so fall back gracefully).
+  function studySubjectMeta(id){
+    var s = subjectById(id);
+    if (!s) return { short: id ? 'Other' : 'No subject', color: '#8A8378' };
+    var course = MY_COURSES.find(function(c){ return c.subjectId===id; });
+    return { short: s.short, color: (course && course.color) || s.color };
+  }
+  function startOfDay(ts){ var d = new Date(ts); d.setHours(0,0,0,0); return d.getTime(); }
+
+  function renderTimer(){
+    var subs = activeSubjects();
+    var accent = '#20262B';
+
+    // ----- The timer card -----
+    var frac = timer.duration > 0 ? (timer.duration - timer.remaining) / timer.duration : 0;
+    var subjMeta = studySubjectMeta(timer.subject);
+    var ringColor = timer.subject ? subjMeta.color : '#6C7A86';
+
+    var subjOpts = '<option value="">No subject</option>' + subs.map(function(s){
+      return '<option value="' + s.id + '"' + (s.id===timer.subject?' selected':'') + '>' + escapeHtml(s.short) + '</option>';
+    }).join('');
+
+    var presets = [15, 25, 50].map(function(m){
+      return '<button type="button" class="tm-preset' + (timer.durationMin===m && !isCustomDur() ? ' active' : '') +
+        '" data-dur="' + m + '"' + (timer.running?' disabled':'') + '>' + m + 'm</button>';
+    }).join('');
+
+    var timerCard =
+      '<div class="timer-card" style="--ring:' + ringColor + '">' +
+        '<div class="tm-controls-top">' +
+          '<label class="tm-subj">Subject<select id="timerSubject"' + (timer.running?' disabled':'') + '>' + subjOpts + '</select></label>' +
+          '<div class="tm-presets">' + presets +
+            '<input type="number" id="timerCustom" class="tm-custom" min="1" max="180" placeholder="min" value="' +
+              (isCustomDur() ? timer.durationMin : '') + '"' + (timer.running?' disabled':'') + ' inputmode="numeric" />' +
+          '</div>' +
+        '</div>' +
+        '<div class="tm-ring" id="timerRing" style="--frac:' + frac.toFixed(4) + '">' +
+          '<div class="tm-ring-inner">' +
+            '<span class="tm-display" id="timerDisplay">' + fmtClock(timer.remaining) + '</span>' +
+            '<span class="tm-state">' + (timer.running ? 'Focusing…' : (timer.remaining < timer.duration ? 'Paused' : 'Ready')) + '</span>' +
+          '</div>' +
+        '</div>' +
+        (timer.justLogged ? '<div class="tm-logged">Logged ' + timer.justLogged + ' min ✓</div>' : '') +
+        '<div class="tm-buttons">' +
+          '<button type="button" id="timerToggle" class="tm-go" style="--accent:' + ringColor + '">' + (timer.running ? 'Pause' : (timer.remaining < timer.duration ? 'Resume' : 'Start')) + '</button>' +
+          '<button type="button" id="timerReset" class="tm-reset">Reset</button>' +
+        '</div>' +
+      '</div>';
+
+    // ----- Manual log row -----
+    var manualSubjOpts = '<option value="">No subject</option>' + subs.map(function(s){
+      return '<option value="' + s.id + '">' + escapeHtml(s.short) + '</option>';
+    }).join('');
+    var manualLog =
+      '<div class="tm-manual">' +
+        '<h3 class="section-title">Log time manually</h3>' +
+        '<div class="grade-add" id="manualLogRow">' +
+          '<select class="ml-subject" id="mlSubject">' + manualSubjOpts + '</select>' +
+          '<input type="number" class="ml-min" id="mlMinutes" placeholder="Minutes" min="1" step="1" inputmode="numeric" />' +
+          '<button type="button" class="ga-add" id="mlAdd" style="--accent:' + accent + '">Log</button>' +
+        '</div>' +
+      '</div>';
+
+    // ----- Stats: last 7 days -----
+    var now = Date.now();
+    var todayStart = startOfDay(now);
+    var weekStart = todayStart - 6*86400000;   // 7 day window including today
+    var recent = STUDY_LOG.filter(function(s){ return s.ts >= weekStart; });
+    var weekTotal = recent.reduce(function(a,s){ return a + (Number(s.minutes)||0); }, 0);
+    var allTimeTotal = STUDY_LOG.reduce(function(a,s){ return a + (Number(s.minutes)||0); }, 0);
+    var sessionCount = recent.length;
+
+    var statCards =
+      '<div class="grade-summary">' +
+        '<div class="gs-stat"><span class="gs-num">' + fmtHrsMin(weekTotal) + '</span><span class="gs-label">Last 7 days</span></div>' +
+        '<div class="gs-stat"><span class="gs-num">' + sessionCount + '</span><span class="gs-label">Sessions this week</span></div>' +
+        '<div class="gs-stat"><span class="gs-num">' + fmtHrsMin(allTimeTotal) + '</span><span class="gs-label">All-time focus</span></div>' +
+      '</div>';
+
+    // Per-subject bars (this week), coloured by subject identity.
+    var bySubj = {};
+    recent.forEach(function(s){ var k = s.subject || ''; bySubj[k] = (bySubj[k]||0) + (Number(s.minutes)||0); });
+    var subjKeys = Object.keys(bySubj).sort(function(a,b){ return bySubj[b]-bySubj[a]; });
+    var maxSubj = subjKeys.reduce(function(m,k){ return Math.max(m, bySubj[k]); }, 0) || 1;
+    var subjBars = subjKeys.length ? subjKeys.map(function(k){
+      var meta = studySubjectMeta(k);
+      var mins = bySubj[k];
+      var pct = Math.round(mins/maxSubj*100);
+      return '<div class="gbar-row">' +
+        '<span class="gbar-name">' + escapeHtml(meta.short) + '</span>' +
+        '<span class="gbar-track"><span class="gbar-fill" style="width:' + pct + '%; background:' + meta.color + '"></span></span>' +
+        '<span class="gbar-val">' + fmtHrsMin(mins) + '</span>' +
+      '</div>';
+    }).join('') : '<div class="empty" style="padding:8px 0;">No focus time logged this week yet.</div>';
+    var subjBlock = '<div class="grade-bars"><h3 class="section-title">This week by subject</h3>' + subjBars + '</div>';
+
+    // Per-day bars (last 7 days), Mon-style short labels.
+    var dayNames = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+    var days = [];
+    for (var i=6; i>=0; i--){
+      var dStart = todayStart - i*86400000;
+      var dEnd = dStart + 86400000;
+      var mins = STUDY_LOG.reduce(function(a,s){ return (s.ts>=dStart && s.ts<dEnd) ? a+(Number(s.minutes)||0) : a; }, 0);
+      days.push({ label: dayNames[new Date(dStart).getDay()], mins: mins, today: dStart===todayStart });
+    }
+    var maxDay = days.reduce(function(m,d){ return Math.max(m, d.mins); }, 0) || 1;
+    var dayBars = '<div class="tm-days">' + days.map(function(d){
+      var h = Math.round(d.mins/maxDay*100);
+      return '<div class="tm-day' + (d.today?' is-today':'') + '">' +
+        '<div class="tm-day-track"><div class="tm-day-fill" style="height:' + (d.mins?Math.max(h,6):0) + '%"></div></div>' +
+        '<span class="tm-day-min">' + (d.mins||'') + '</span>' +
+        '<span class="tm-day-label">' + d.label + '</span>' +
+      '</div>';
+    }).join('') + '</div>';
+    var dayBlock = '<div class="grade-bars"><h3 class="section-title">Minutes per day</h3>' + dayBars + '</div>';
+
+    // Recent sessions list (most recent first).
+    var sorted = STUDY_LOG.slice().sort(function(a,b){ return b.ts - a.ts; }).slice(0, 20);
+    var sessions = sorted.length ? sorted.map(function(s){
+      var meta = studySubjectMeta(s.subject);
+      return '<div class="grade-row">' +
+        '<span class="grade-title"><span class="grade-flag" style="background:' + meta.color + ';display:inline-block;vertical-align:middle;margin-right:8px"></span>' + escapeHtml(meta.short) + '</span>' +
+        '<span class="grade-score">' + s.minutes + ' min</span>' +
+        '<span class="grade-date">' + fmtDate(s.ts) + '</span>' +
+        '<button class="del" data-delstudy="' + s.id + '" title="Remove">×</button>' +
+      '</div>';
+    }).join('') : '<div class="empty" style="padding:8px 0;">No sessions yet — start the timer above.</div>';
+    var sessionsBlock = '<div class="grade-subject" style="--accent:' + accent + '"><div class="grade-head"><h3>Recent sessions</h3></div><div class="grade-rows">' + sessions + '</div></div>';
+
+    return (
+      '<div class="page-header" style="--accent:' + accent + '">' +
+        '<div><h2>Study timer</h2><p class="kicker">Focus in sessions, then see where your time goes</p></div>' +
+      '</div>' +
+      timerCard +
+      manualLog +
+      statCards +
+      subjBlock +
+      dayBlock +
+      sessionsBlock
+    );
+  }
+  function isCustomDur(){ return [15,25,50].indexOf(timer.durationMin) === -1; }
+  function fmtHrsMin(mins){
+    mins = Math.round(mins||0);
+    if (mins < 60) return mins + ' min';
+    var h = Math.floor(mins/60), m = mins%60;
+    return h + 'h' + (m ? ' ' + m + 'm' : '');
+  }
+
   function renderQuickAdd(defaultSubject, defaultLevel, accent){
     var subjOptions = activeSubjects().map(function(s){
       return '<option value="' + s.id + '"' + (s.id===defaultSubject?' selected':'') + '>' + s.short + '</option>';
@@ -2560,7 +2857,7 @@
     document.querySelectorAll('[data-delgrade]').forEach(function(b){
       b.addEventListener('click', function(){ deleteGrade(b.getAttribute('data-delgrade')); });
     });
-    document.querySelectorAll('.grade-add').forEach(function(row){
+    document.querySelectorAll('.grade-add[data-addsubject]').forEach(function(row){
       var subj = row.getAttribute('data-addsubject');
       var addBtn = row.querySelector('.ga-add');
       var titleI = row.querySelector('.ga-title');
@@ -2604,6 +2901,26 @@
     document.querySelectorAll('[data-fcmark]').forEach(function(b){ b.addEventListener('click', function(){ fcMark(b.getAttribute('data-fcmark')==='known'); }); });
     var fcAgainBtn = document.getElementById('fcAgainBtn');
     if (fcAgainBtn){ fcAgainBtn.addEventListener('click', function(){ startStudy(fcStudy ? fcStudy.deckId : fcDeckId); }); }
+
+    // Study timer
+    var timerSubject = document.getElementById('timerSubject');
+    if (timerSubject){ timerSubject.addEventListener('change', function(){ timerSetSubject(timerSubject.value); }); }
+    document.querySelectorAll('[data-dur]').forEach(function(b){ b.addEventListener('click', function(){ timerSetDuration(b.getAttribute('data-dur')); }); });
+    var timerCustom = document.getElementById('timerCustom');
+    if (timerCustom){ timerCustom.addEventListener('change', function(){ if (timerCustom.value) timerSetDuration(timerCustom.value); }); }
+    var timerToggleBtn = document.getElementById('timerToggle');
+    if (timerToggleBtn){ timerToggleBtn.addEventListener('click', timerToggle); }
+    var timerResetBtn = document.getElementById('timerReset');
+    if (timerResetBtn){ timerResetBtn.addEventListener('click', timerReset); }
+    var mlAdd = document.getElementById('mlAdd');
+    if (mlAdd){ mlAdd.addEventListener('click', function(){
+      var subj = document.getElementById('mlSubject'), min = document.getElementById('mlMinutes');
+      if (addStudyLog(subj ? subj.value : '', min ? min.value : 0)){ if (min) min.value = ''; }
+      else if (min){ min.focus(); }
+    }); }
+    var mlMinutes = document.getElementById('mlMinutes');
+    if (mlMinutes){ mlMinutes.addEventListener('keydown', function(e){ if (e.key==='Enter'){ document.getElementById('mlAdd').click(); } }); }
+    document.querySelectorAll('[data-delstudy]').forEach(function(b){ b.addEventListener('click', function(){ deleteStudyLog(b.getAttribute('data-delstudy')); }); });
 
     // Add toggle
     var addBtn = document.getElementById('addToggleBtn');
@@ -3272,9 +3589,9 @@
         // Fully reset in-memory state so nothing leaks to the next account.
         if (unsubscribeBinder){ unsubscribeBinder(); unsubscribeBinder = null; }
         binderRef = null; firstSnapshot = true;
-        ENTRIES = []; DISMISSED = []; MY_COURSES = []; FILES = []; GRADES = []; DECKS = [];
+        ENTRIES = []; DISMISSED = []; MY_COURSES = []; FILES = []; GRADES = []; DECKS = []; STUDY_LOG = [];
         SETTINGS = normalizeSettings(null); applyTheme();
-        fcDeckId = null; fcStudy = null;
+        fcDeckId = null; fcStudy = null; timerReset();
         currentView = 'overview'; quickAddOpen = false;
         setMsg('');
         showGate();
