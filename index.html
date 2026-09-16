@@ -3591,7 +3591,11 @@
         binderRef = null; firstSnapshot = true;
         ENTRIES = []; DISMISSED = []; MY_COURSES = []; FILES = []; GRADES = []; DECKS = []; STUDY_LOG = [];
         SETTINGS = normalizeSettings(null); applyTheme();
-        fcDeckId = null; fcStudy = null; timerReset();
+        fcDeckId = null; fcStudy = null;
+        // Stop any running countdown and fully reset the timer so the chosen
+        // subject/length never leaks into the next account's session.
+        if (timer.tick){ clearInterval(timer.tick); timer.tick = null; }
+        timer = { subject:'', durationMin:25, duration:25*60, remaining:25*60, running:false, tick:null, justLogged:0 };
         currentView = 'overview'; quickAddOpen = false;
         setMsg('');
         showGate();
