@@ -644,6 +644,61 @@
     .cal-nav .cal-month{min-width:110px; font-size:13px;}
   }
 
+  /* ---------- Grades ---------- */
+  .grade-summary{display:flex; flex-wrap:wrap; gap:14px; margin-bottom:22px;}
+  .grade-summary .gs-stat{
+    background:var(--card); border:1px solid var(--rule); border-radius:10px;
+    padding:14px 18px; min-width:150px;
+  }
+  .gs-num{display:block; font-family:'Fraunces',Georgia,serif; font-size:30px; font-weight:600; color:var(--ink); line-height:1;}
+  .gs-den{font-size:16px; color:var(--ink-soft); font-weight:500;}
+  .gs-label{display:block; font-size:12px; color:var(--ink-soft); margin-top:7px;}
+  .gs-core{
+    display:flex; flex-direction:column; gap:6px; justify-content:center; font-size:12px; color:var(--ink-soft);
+    background:var(--card); border:1px solid var(--rule); border-radius:10px; padding:12px 16px;
+  }
+  .gs-core select, .grade-pred select{
+    font-family:inherit; font-size:14px; padding:6px 8px; border:1px solid var(--rule);
+    border-radius:6px; background:#fffefb; color:var(--ink);
+  }
+  .grade-bars{margin-bottom:26px;}
+  .gbar-row{display:flex; align-items:center; gap:12px; margin-bottom:8px;}
+  .gbar-name{width:96px; font-size:13px; color:var(--ink); flex-shrink:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .gbar-track{flex:1; height:10px; background:rgba(128,128,128,0.14); border-radius:6px; overflow:hidden;}
+  .gbar-fill{display:block; height:100%; border-radius:6px; min-width:2px; transition:width .3s ease;}
+  .gbar-val{width:46px; text-align:right; font-size:12.5px; color:var(--ink-soft); flex-shrink:0;}
+  .grade-subject{
+    background:var(--card); border:1px solid var(--rule); border-left:3px solid var(--accent,#999);
+    border-radius:9px; padding:14px 16px; margin-bottom:14px;
+  }
+  .grade-head{display:flex; align-items:center; gap:10px; flex-wrap:wrap;}
+  .grade-flag{width:9px; height:9px; border-radius:2px; flex-shrink:0;}
+  .grade-head h3{font-size:16px; font-weight:600; flex:1; min-width:120px;}
+  .grade-avg{font-size:13px; color:var(--ink-soft);}
+  .grade-pred{display:flex; align-items:center; gap:6px; font-size:12px; color:var(--ink-soft);}
+  .grade-spark{margin:10px 0 4px;}
+  .spark{display:block;}
+  .spark-base{stroke:var(--rule); stroke-width:1;}
+  .grade-rows{margin:6px 0;}
+  .grade-row{display:flex; align-items:center; gap:10px; padding:6px 0; border-bottom:1px solid var(--rule); font-size:13.5px;}
+  .grade-row:last-child{border-bottom:none;}
+  .grade-title{flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .grade-score{color:var(--ink-soft); font-size:12.5px; white-space:nowrap;}
+  .grade-date{color:var(--ink-soft); font-size:12px; width:60px; text-align:right; flex-shrink:0;}
+  .grade-add{display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin-top:12px;}
+  .grade-add input{font-family:inherit; font-size:13px; padding:7px 8px; border:1px solid var(--rule); border-radius:6px; background:#fffefb; color:var(--ink);}
+  .grade-add .ga-title{flex:1; min-width:130px;}
+  .grade-add .ga-score, .grade-add .ga-outof{width:76px;}
+  .grade-add .ga-slash{color:var(--ink-soft);}
+  .grade-add .ga-add{
+    background:var(--accent,var(--ink)); color:#fff; border:none; border-radius:6px;
+    padding:8px 15px; font-size:13px; font-weight:500; cursor:pointer;
+  }
+  .grade-add .ga-add:hover{opacity:.92;}
+  html.theme-dark .gs-core select, html.theme-dark .grade-pred select,
+  html.theme-dark .grade-add input{background:#171C21;}
+  @media (max-width:760px){ .grade-add .ga-title{min-width:100%;} }
+
   /* ---------- PDF viewer (full-screen, in-app) ---------- */
   .pdf-modal{
     position:fixed; inset:0; background:rgba(0,0,0,0.9); z-index:80;
@@ -920,9 +975,10 @@
 
   var ENTRIES = [];
   var DISMISSED = [];
-  var MY_COURSES = [];      // [{ subjectId, level }] — the person's actual course list
+  var MY_COURSES = [];      // [{ subjectId, level, color?, predicted? }] — the person's course list
   var FILES = [];           // lightweight PDF metadata: [{ id, subject, name, size, level, createdAt }]
-  var SETTINGS = { theme:'paper', sortBy:'catalog', hideCompleted:false };
+  var GRADES = [];          // assessment scores: [{ id, subject, title, score, outOf, date, createdAt }]
+  var SETTINGS = { theme:'paper', sortBy:'catalog', hideCompleted:false, corePoints:0 };
   var currentView = 'overview';
   var levelFilter = 'All';
   var quickAddOpen = false;
@@ -987,10 +1043,13 @@
   var DARK_THEMES = ['dark','forest','grape'];
   function normalizeSettings(s){
     s = s || {};
+    var core = parseInt(s.corePoints, 10);
+    if (isNaN(core) || core < 0) core = 0; if (core > 3) core = 3;
     return {
       theme:  (THEME_IDS.indexOf(s.theme) !== -1) ? s.theme : 'paper',
       sortBy: (s.sortBy==='az' || s.sortBy==='deadline' || s.sortBy==='catalog') ? s.sortBy : 'catalog',
-      hideCompleted: !!s.hideCompleted
+      hideCompleted: !!s.hideCompleted,
+      corePoints: core
     };
   }
   function applyTheme(){
@@ -1059,6 +1118,7 @@
         dismissed: DISMISSED,
         courses: MY_COURSES,
         files: FILES,
+        grades: GRADES,
         settings: SETTINGS,
         updatedAt: serverTimestamp()
       }, { merge: true });
@@ -1085,9 +1145,10 @@
         DISMISSED = Array.isArray(d.dismissed) ? d.dismissed : [];
         MY_COURSES= Array.isArray(d.courses)   ? d.courses   : [];
         FILES     = Array.isArray(d.files)     ? d.files     : [];
+        GRADES    = Array.isArray(d.grades)    ? d.grades    : [];
         SETTINGS  = normalizeSettings(d.settings);
       } else {
-        ENTRIES = []; DISMISSED = []; MY_COURSES = []; FILES = [];
+        ENTRIES = []; DISMISSED = []; MY_COURSES = []; FILES = []; GRADES = [];
         SETTINGS = normalizeSettings(null);
       }
       applyTheme();
@@ -1482,22 +1543,90 @@
     renderPage();
   }
 
+  /* ---------------- Grades ---------------- */
+  function subjectGrades(subjId){
+    return GRADES.filter(function(g){ return g.subject===subjId; })
+                 .sort(function(a,b){
+                   var da = a.date ? new Date(a.date+'T00:00:00').getTime() : a.createdAt;
+                   var db = b.date ? new Date(b.date+'T00:00:00').getTime() : b.createdAt;
+                   return da - db;   // chronological
+                 });
+  }
+  function gradePct(g){
+    var s = Number(g.score), o = Number(g.outOf);
+    if (!o || o <= 0 || isNaN(s) || isNaN(o)) return null;
+    return Math.max(0, Math.min(100, (s / o) * 100));
+  }
+  function subjectAvg(subjId){
+    var ps = subjectGrades(subjId).map(gradePct).filter(function(p){ return p!==null; });
+    if (!ps.length) return null;
+    return ps.reduce(function(a,b){ return a+b; }, 0) / ps.length;
+  }
+  function coursePredicted(subjId){
+    var c = MY_COURSES.find(function(x){ return x.subjectId===subjId; });
+    return c && c.predicted ? c.predicted : null;
+  }
+  function addGrade(subjId, title, score, outOf, date){
+    var s = Number(score), o = Number(outOf);
+    if (isNaN(s) || isNaN(o) || o <= 0) return false;
+    GRADES.push({
+      id: uid('grade'), subject: subjId, title: (title||'').trim() || 'Assessment',
+      score: s, outOf: o, date: date || null, createdAt: Date.now()
+    });
+    saveData();
+    renderPage();
+    return true;
+  }
+  function deleteGrade(id){
+    GRADES = GRADES.filter(function(g){ return g.id!==id; });
+    saveData();
+    renderPage();
+  }
+  function setPredicted(subjId, val){
+    var c = MY_COURSES.find(function(x){ return x.subjectId===subjId; });
+    if (!c) return;
+    var n = parseInt(val, 10);
+    if (isNaN(n) || n < 1 || n > 7){ delete c.predicted; } else { c.predicted = n; }
+    saveData();
+    renderPage();
+  }
+  function setCorePoints(val){
+    SETTINGS.corePoints = normalizeSettings({ corePoints: val }).corePoints;
+    saveData();
+    renderPage();
+  }
+  // A tiny inline-SVG trend line of assessment percentages (0–100), one series.
+  function sparkline(vals, color){
+    if (!vals.length) return '';
+    var w = 150, h = 38, pad = 5, n = vals.length;
+    var xt = function(i){ return pad + (n===1 ? (w-2*pad) : (i*(w-2*pad)/(n-1))); };
+    var yt = function(v){ return h-pad - (v/100)*(h-2*pad); };
+    var pts = vals.map(function(v,i){ return xt(i)+','+yt(v); }).join(' ');
+    var last = vals[n-1];
+    return '<svg class="spark" viewBox="0 0 '+w+' '+h+'" width="'+w+'" height="'+h+'" role="img" aria-label="Score trend">' +
+      '<line class="spark-base" x1="'+pad+'" y1="'+(h-pad)+'" x2="'+(w-pad)+'" y2="'+(h-pad)+'"/>' +
+      (n>1 ? '<polyline points="'+pts+'" fill="none" stroke="'+color+'" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>' : '') +
+      '<circle cx="'+xt(n-1)+'" cy="'+yt(last)+'" r="3.2" fill="'+color+'"/>' +
+    '</svg>';
+  }
+
   /* ---------------- Nav ---------------- */
   function renderNav(){
     var ul = document.getElementById('spineNav');
     var html = '';
     html += navItem('overview', 'Overview', 'All courses', '#8A8378', 0);
     html += navItem('calendar', 'Calendar', 'Deadlines', '#8A8378', 1);
-    html += navItem('search',   'Search',   'Find anything', '#8A8378', 2);
+    html += navItem('grades',   'Grades',   'Scores & predicted', '#8A8378', 2);
+    html += navItem('search',   'Search',   'Find anything', '#8A8378', 3);
     var subs = activeSubjects();
     subs.forEach(function(s, i){
-      html += navItem(s.id, s.short, s.myLevel, s.color, i+3);
+      html += navItem(s.id, s.short, s.myLevel, s.color, i+4);
     });
-    html += '<li><button class="tab manage-tab' + (currentView==='courseSetup'?' active':'') + '" id="navManageCourses" style="--i:' + (subs.length+3) + '">' +
+    html += '<li><button class="tab manage-tab' + (currentView==='courseSetup'?' active':'') + '" id="navManageCourses" style="--i:' + (subs.length+4) + '">' +
       '<span class="flag" style="--flag-color:#8A8378"></span>' +
       '<span class="tab-name">Manage courses<span class="tab-sub">Add or edit</span></span>' +
       '</button></li>';
-    html += '<li><button class="tab' + (currentView==='settings'?' active':'') + '" id="navSettings" style="--i:' + (subs.length+4) + '">' +
+    html += '<li><button class="tab' + (currentView==='settings'?' active':'') + '" id="navSettings" style="--i:' + (subs.length+5) + '">' +
       '<span class="flag" style="--flag-color:#8A8378"></span>' +
       '<span class="tab-name">Settings<span class="tab-sub">Theme &amp; sorting</span></span>' +
       '</button></li>';
@@ -1543,6 +1672,8 @@
       page.innerHTML = renderSettings();
     } else if (currentView === 'calendar'){
       page.innerHTML = renderCalendar();
+    } else if (currentView === 'grades'){
+      page.innerHTML = renderGrades();
     } else if (currentView === 'search'){
       page.innerHTML = renderSearch();
     } else {
@@ -1929,6 +2060,104 @@
     );
   }
 
+  /* ---------------- Grades ---------------- */
+  function renderGrades(){
+    var subs = activeSubjects();
+    if (!subs.length){
+      return '<div class="page-header" style="--accent:#20262B"><div><h2>Grades</h2>' +
+        '<p class="kicker">Track your scores and predicted grade</p></div></div>' +
+        '<div class="empty">Add some courses first (Manage courses), then log your assessment scores here.</div>';
+    }
+
+    // Predicted total: sum of set predicted grades + core points.
+    var predSum = 0, predCount = 0;
+    subs.forEach(function(s){ var p = coursePredicted(s.id); if (p){ predSum += p; predCount++; } });
+    var core = SETTINGS.corePoints || 0;
+    var maxSubjectPts = subs.length * 7;
+    var total = predSum + core;
+    var maxTotal = maxSubjectPts + 3;
+
+    // Overall average across subjects that have any scores.
+    var subjAvgs = subs.map(function(s){ return { s:s, avg:subjectAvg(s.id) }; });
+    var withScores = subjAvgs.filter(function(x){ return x.avg !== null; });
+    var overallAvg = withScores.length
+      ? Math.round(withScores.reduce(function(a,x){ return a+x.avg; }, 0) / withScores.length)
+      : null;
+
+    var summary =
+      '<div class="grade-summary">' +
+        '<div class="gs-stat"><span class="gs-num">' + total + '<span class="gs-den"> / ' + maxTotal + '</span></span>' +
+          '<span class="gs-label">Predicted points' + (predCount<subs.length ? ' (' + predCount + '/' + subs.length + ' set)' : '') + '</span></div>' +
+        '<div class="gs-stat"><span class="gs-num">' + (overallAvg!==null ? overallAvg + '%' : '—') + '</span>' +
+          '<span class="gs-label">Average score</span></div>' +
+        '<label class="gs-core">Core points (TOK + EE)' +
+          '<select id="corePoints">' + [0,1,2,3].map(function(n){
+            return '<option value="' + n + '"' + (core===n?' selected':'') + '>' + n + '</option>';
+          }).join('') + '</select></label>' +
+      '</div>';
+
+    // Average bars, one per subject (magnitude; coloured by subject identity).
+    var bars = subjAvgs.map(function(x){
+      var pct = x.avg===null ? 0 : Math.round(x.avg);
+      return '<div class="gbar-row">' +
+        '<span class="gbar-name">' + escapeHtml(x.s.short) + '</span>' +
+        '<span class="gbar-track"><span class="gbar-fill" style="width:' + pct + '%; background:' + x.s.color + '"></span></span>' +
+        '<span class="gbar-val">' + (x.avg===null ? '—' : pct + '%') + '</span>' +
+      '</div>';
+    }).join('');
+    var barsBlock = '<div class="grade-bars"><h3 class="section-title">Average by subject</h3>' + bars + '</div>';
+
+    // Per-subject detail: predicted picker, sparkline, assessment list + add row.
+    var blocks = subs.map(function(s){
+      var gs = subjectGrades(s.id);
+      var avg = subjectAvg(s.id);
+      var pred = coursePredicted(s.id);
+      var vals = gs.map(gradePct).filter(function(p){ return p!==null; });
+
+      var predOpts = '<option value="">—</option>' + [7,6,5,4,3,2,1].map(function(n){
+        return '<option value="' + n + '"' + (pred===n?' selected':'') + '>' + n + '</option>';
+      }).join('');
+
+      var rows = gs.length ? gs.map(function(g){
+        var p = gradePct(g);
+        return '<div class="grade-row">' +
+          '<span class="grade-title">' + escapeHtml(g.title) + '</span>' +
+          '<span class="grade-score">' + g.score + '/' + g.outOf + (p!==null ? ' · ' + Math.round(p) + '%' : '') + '</span>' +
+          '<span class="grade-date">' + (g.date ? fmtDate(new Date(g.date+'T00:00:00').getTime()) : '') + '</span>' +
+          '<button class="del" data-delgrade="' + g.id + '" title="Remove">×</button>' +
+        '</div>';
+      }).join('') : '<div class="empty" style="padding:8px 0;">No scores logged yet.</div>';
+
+      return '<div class="grade-subject" style="--accent:' + s.color + '">' +
+        '<div class="grade-head">' +
+          '<span class="grade-flag" style="background:' + s.color + '"></span>' +
+          '<h3>' + escapeHtml(s.name) + '</h3>' +
+          '<span class="grade-avg">' + (avg!==null ? Math.round(avg) + '%' : 'No scores') + '</span>' +
+          '<label class="grade-pred">Predicted<select data-predicted="' + s.id + '">' + predOpts + '</select></label>' +
+        '</div>' +
+        (vals.length ? '<div class="grade-spark">' + sparkline(vals, s.color) + '</div>' : '') +
+        '<div class="grade-rows">' + rows + '</div>' +
+        '<div class="grade-add" data-addsubject="' + s.id + '">' +
+          '<input type="text" class="ga-title" placeholder="Assessment (e.g. Paper 1)" />' +
+          '<input type="number" class="ga-score" placeholder="Score" min="0" step="any" inputmode="decimal" />' +
+          '<span class="ga-slash">/</span>' +
+          '<input type="number" class="ga-outof" placeholder="Out of" min="1" step="any" inputmode="decimal" />' +
+          '<input type="date" class="ga-date" />' +
+          '<button type="button" class="ga-add" style="--accent:' + s.color + '">Add</button>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+
+    return (
+      '<div class="page-header" style="--accent:#20262B">' +
+        '<div><h2>Grades</h2><p class="kicker">Log scores, track your predicted /45</p></div>' +
+      '</div>' +
+      summary +
+      barsBlock +
+      blocks
+    );
+  }
+
   function renderQuickAdd(defaultSubject, defaultLevel, accent){
     var subjOptions = activeSubjects().map(function(s){
       return '<option value="' + s.id + '"' + (s.id===defaultSubject?' selected':'') + '>' + s.short + '</option>';
@@ -2092,6 +2321,33 @@
       b.addEventListener('click', function(){
         SETTINGS.hideCompleted = (b.getAttribute('data-hide-set')==='hide');
         persist(); renderPage();
+      });
+    });
+
+    // Grades: core points, predicted grade, delete score, add score
+    var coreSel = document.getElementById('corePoints');
+    if (coreSel){ coreSel.addEventListener('change', function(){ setCorePoints(coreSel.value); }); }
+    document.querySelectorAll('[data-predicted]').forEach(function(sel){
+      sel.addEventListener('change', function(){ setPredicted(sel.getAttribute('data-predicted'), sel.value); });
+    });
+    document.querySelectorAll('[data-delgrade]').forEach(function(b){
+      b.addEventListener('click', function(){ deleteGrade(b.getAttribute('data-delgrade')); });
+    });
+    document.querySelectorAll('.grade-add').forEach(function(row){
+      var subj = row.getAttribute('data-addsubject');
+      var addBtn = row.querySelector('.ga-add');
+      var titleI = row.querySelector('.ga-title');
+      var scoreI = row.querySelector('.ga-score');
+      var outI   = row.querySelector('.ga-outof');
+      var dateI  = row.querySelector('.ga-date');
+      function submit(){
+        if (!addGrade(subj, titleI.value, scoreI.value, outI.value, dateI.value)){
+          (scoreI.value==='' ? scoreI : outI).focus();
+        }
+      }
+      if (addBtn){ addBtn.addEventListener('click', submit); }
+      [titleI, scoreI, outI].forEach(function(inp){
+        if (inp){ inp.addEventListener('keydown', function(e){ if (e.key==='Enter'){ submit(); } }); }
       });
     });
 
@@ -2762,7 +3018,7 @@
         // Fully reset in-memory state so nothing leaks to the next account.
         if (unsubscribeBinder){ unsubscribeBinder(); unsubscribeBinder = null; }
         binderRef = null; firstSnapshot = true;
-        ENTRIES = []; DISMISSED = []; MY_COURSES = []; FILES = [];
+        ENTRIES = []; DISMISSED = []; MY_COURSES = []; FILES = []; GRADES = [];
         SETTINGS = normalizeSettings(null); applyTheme();
         currentView = 'overview'; quickAddOpen = false;
         setMsg('');
