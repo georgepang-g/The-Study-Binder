@@ -139,6 +139,7 @@
     word-break:break-all;
   }
   .spine-foot .sync-note{display:block; margin-bottom:8px;}
+  .spine-foot .sync-note.sync-error{color:#F2B24C; font-weight:600;}
   .spine-foot button{
     margin-top:8px;
     width:100%;
@@ -1115,6 +1116,7 @@
   var auth = null, db = null, currentUser = null;
   var binderRef = null, unsubscribeBinder = null;
   var firstSnapshot = true;
+  var saveFailed = false;   // last cloud write threw (e.g. doc too large / rules) — surfaced in the sidebar
 
   function configLooksReal(){
     return FIREBASE_CONFIG.apiKey &&
@@ -1242,8 +1244,16 @@
         settings: SETTINGS,
         updatedAt: serverTimestamp()
       }, { merge: true });
+      // With the offline cache on, setDoc resolves even while disconnected
+      // (the write queues locally), so reaching here means the save is safe.
+      if (saveFailed){ saveFailed = false; updateSyncNote(); }
     }catch(e){
+      // A genuine, non-recoverable failure: the binder document is too large
+      // (Firestore caps one doc at ~1 MB), the security rules rejected it, or
+      // the sign-in expired. Tell the person so a change isn't lost silently.
       console.error('Could not save binder to the cloud', e);
+      saveFailed = true;
+      updateSyncNote();
     }
   }
 
@@ -3293,6 +3303,12 @@
   function updateSyncNote(){
     var el = document.getElementById('syncNote');
     if (!el) return;
+    if (saveFailed){
+      el.classList.add('sync-error');
+      el.textContent = '⚠ Couldn’t save your last change to the cloud. It may be too large, or you may need to sign in again.';
+      return;
+    }
+    el.classList.remove('sync-error');
     el.textContent = navigator.onLine
       ? 'Synced across all your devices.'
       : 'Offline — changes are saved here and will sync when you reconnect.';
@@ -3616,7 +3632,7 @@
       } else {
         // Fully reset in-memory state so nothing leaks to the next account.
         if (unsubscribeBinder){ unsubscribeBinder(); unsubscribeBinder = null; }
-        binderRef = null; firstSnapshot = true;
+        binderRef = null; firstSnapshot = true; saveFailed = false;
         ENTRIES = []; DISMISSED = []; MY_COURSES = []; FILES = []; GRADES = []; DECKS = []; STUDY_LOG = [];
         SETTINGS = normalizeSettings(null); applyTheme();
         fcDeckId = null; fcStudy = null;
