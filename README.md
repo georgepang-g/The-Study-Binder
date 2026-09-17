@@ -48,10 +48,12 @@ sign-in and storage. You need to do a one-time setup, then host the file.
   the app opens instantly, works with no connection, and anything you change while
   offline is saved on the device and syncs automatically when you reconnect. The
   sidebar shows an "Offline" note while you're disconnected.
-- **Save-failure warning:** if a change genuinely can't be saved to the cloud (for
-  example the binder document has grown past Firestore's ~1 MB per-document limit,
-  or your sign-in has expired), the sidebar shows a clear warning instead of failing
-  silently — so you can export a copy or sign in again rather than lose work.
+- **Save-failure warning:** if a change genuinely can't be synced to the cloud —
+  most often because the binder document has grown past Firestore's ~1 MB
+  per-document limit, or the security rules deny access — the sidebar shows a clear
+  warning instead of failing silently, so you can export a copy rather than lose
+  work. (Ordinary offline editing is *not* a failure: those changes are queued
+  locally and the sidebar just shows an "Offline" note until they sync.)
 
 ---
 

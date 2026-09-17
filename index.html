@@ -1116,7 +1116,8 @@
   var auth = null, db = null, currentUser = null;
   var binderRef = null, unsubscribeBinder = null;
   var firstSnapshot = true;
-  var saveFailed = false;   // last cloud write threw (e.g. doc too large / rules) — surfaced in the sidebar
+  var saveFailed = false;   // a cloud write/sync failed (e.g. doc too large / rules) — surfaced in the sidebar
+  var saveSeq = 0;          // monotonic id of the latest persist() so stale writes don't flip saveFailed
 
   function configLooksReal(){
     return FIREBASE_CONFIG.apiKey &&
@@ -1232,6 +1233,14 @@
   // own private binder that follows them to every device.
   async function persist(){
     if (!binderRef) return;
+    // With offline persistence on, setDoc's promise resolves only once the write
+    // is committed to the *backend* (it stays pending while offline, then settles
+    // on reconnect), and rejects when the backend refuses the write — e.g. the
+    // binder document grew past Firestore's ~1 MB cap or the rules rejected it.
+    // A sequence number lets a stale, superseded write's outcome be ignored, so
+    // overlapping saves can't leave the warning flag inconsistent: only the most
+    // recent write in flight is allowed to set or clear it.
+    var mySeq = ++saveSeq;
     try{
       await setDoc(binderRef, {
         entries: ENTRIES,
@@ -1244,16 +1253,13 @@
         settings: SETTINGS,
         updatedAt: serverTimestamp()
       }, { merge: true });
-      // With the offline cache on, setDoc resolves even while disconnected
-      // (the write queues locally), so reaching here means the save is safe.
-      if (saveFailed){ saveFailed = false; updateSyncNote(); }
+      // Reaching here means this write reached the backend durably.
+      if (mySeq === saveSeq && saveFailed){ saveFailed = false; updateSyncNote(); }
     }catch(e){
-      // A genuine, non-recoverable failure: the binder document is too large
-      // (Firestore caps one doc at ~1 MB), the security rules rejected it, or
-      // the sign-in expired. Tell the person so a change isn't lost silently.
       console.error('Could not save binder to the cloud', e);
-      saveFailed = true;
-      updateSyncNote();
+      // Ignore a failure that a newer write has already superseded — the newer
+      // write's own outcome is what reflects the current data's save state.
+      if (mySeq === saveSeq){ saveFailed = true; updateSyncNote(); }
     }
   }
 
@@ -1304,6 +1310,12 @@
         document.getElementById('page').innerHTML =
           '<div class="empty">Could not reach the cloud. Check your connection and refresh. ' +
           'If this is a fresh setup, confirm your Firestore security rules allow the signed-in user.</div>';
+      } else if (err && err.code === 'permission-denied'){
+        // A persistent, real break (e.g. the security rules were tightened): the
+        // listener can no longer read, and writes won't durably save either.
+        // Transient codes ('unavailable', …) are left to the listener's own retry.
+        saveFailed = true;
+        updateSyncNote();
       }
     });
   }
@@ -3303,15 +3315,21 @@
   function updateSyncNote(){
     var el = document.getElementById('syncNote');
     if (!el) return;
+    // Offline edits are safely queued in the local cache, so while offline show
+    // the reassuring offline note even if an earlier save failed — a genuine
+    // failure re-surfaces on reconnect when the queued write settles.
+    if (!navigator.onLine){
+      el.classList.remove('sync-error');
+      el.textContent = 'Offline — changes are saved here and will sync when you reconnect.';
+      return;
+    }
     if (saveFailed){
       el.classList.add('sync-error');
-      el.textContent = '⚠ Couldn’t save your last change to the cloud. It may be too large, or you may need to sign in again.';
+      el.textContent = '⚠ Couldn’t sync your latest changes to the cloud — your binder may have grown too large. Use “Export my binder” below to keep a copy.';
       return;
     }
     el.classList.remove('sync-error');
-    el.textContent = navigator.onLine
-      ? 'Synced across all your devices.'
-      : 'Offline — changes are saved here and will sync when you reconnect.';
+    el.textContent = 'Synced across all your devices.';
   }
   window.addEventListener('online', updateSyncNote);
   window.addEventListener('offline', updateSyncNote);
