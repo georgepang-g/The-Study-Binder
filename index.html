@@ -1150,6 +1150,16 @@
     return sortSubjects(list);
   }
 
+  // <option>s for the subjects the person takes. Pass a selected id to mark one,
+  // and a noneLabel (e.g. "No subject") to prepend a blank-value option.
+  function subjectOptions(selectedId, noneLabel){
+    var head = noneLabel ? '<option value="">' + escapeHtml(noneLabel) + '</option>' : '';
+    return head + activeSubjects().map(function(s){
+      return '<option value="' + s.id + '"' + (s.id===selectedId ? ' selected' : '') +
+             '>' + escapeHtml(s.short) + '</option>';
+    }).join('');
+  }
+
   function isSubjectActive(id){
     return MY_COURSES.some(function(c){ return c.subjectId===id; });
   }
@@ -1268,6 +1278,21 @@
   function saveData(){ return persist(); }
   function saveCourses(){ return persist(); }
 
+  // Populate all in-memory binder collections from a Firestore document (or from
+  // null to clear them). Every array is guarded so a malformed field can't break
+  // the app; SETTINGS is normalized. Used by the live listener and on sign-out.
+  function loadBinder(d){
+    d = d || {};
+    ENTRIES   = Array.isArray(d.entries)   ? d.entries   : [];
+    DISMISSED = Array.isArray(d.dismissed) ? d.dismissed : [];
+    MY_COURSES= Array.isArray(d.courses)   ? d.courses   : [];
+    FILES     = Array.isArray(d.files)     ? d.files     : [];
+    GRADES    = Array.isArray(d.grades)    ? d.grades    : [];
+    DECKS     = Array.isArray(d.decks)     ? d.decks     : [];
+    STUDY_LOG = Array.isArray(d.study)     ? d.study     : [];
+    SETTINGS  = normalizeSettings(d.settings);
+  }
+
   function subscribeBinder(){
     binderRef = doc(db, 'binders', currentUser.uid);
     firstSnapshot = true;
@@ -1275,20 +1300,7 @@
     unsubscribeBinder = onSnapshot(binderRef, function(snap){
       var fromRemote = !snap.metadata.hasPendingWrites; // false = our own optimistic write
 
-      if (snap.exists()){
-        var d = snap.data() || {};
-        ENTRIES   = Array.isArray(d.entries)   ? d.entries   : [];
-        DISMISSED = Array.isArray(d.dismissed) ? d.dismissed : [];
-        MY_COURSES= Array.isArray(d.courses)   ? d.courses   : [];
-        FILES     = Array.isArray(d.files)     ? d.files     : [];
-        GRADES    = Array.isArray(d.grades)    ? d.grades    : [];
-        DECKS     = Array.isArray(d.decks)     ? d.decks     : [];
-        STUDY_LOG = Array.isArray(d.study)     ? d.study     : [];
-        SETTINGS  = normalizeSettings(d.settings);
-      } else {
-        ENTRIES = []; DISMISSED = []; MY_COURSES = []; FILES = []; GRADES = []; DECKS = []; STUDY_LOG = [];
-        SETTINGS = normalizeSettings(null);
-      }
+      loadBinder(snap.exists() ? snap.data() : null);
       applyTheme();
 
       if (firstSnapshot){
@@ -2453,9 +2465,7 @@
   }
   function renderDeckList(){
     var subs = activeSubjects();
-    var subjOpts = '<option value="">No subject</option>' + subs.map(function(s){
-      return '<option value="' + s.id + '">' + escapeHtml(s.short) + '</option>';
-    }).join('');
+    var subjOpts = subjectOptions(null, 'No subject');
     var list = DECKS.length ? DECKS.slice().sort(function(a,b){ return b.createdAt-a.createdAt; }).map(function(d){
       var subj = subs.find(function(s){ return s.id===d.subject; });
       var color = subj ? subj.color : '#8A8378';
@@ -2588,7 +2598,6 @@
   }
 
   function renderTimer(){
-    var subs = activeSubjects();
     var accent = '#20262B';
 
     // ----- The timer card -----
@@ -2596,9 +2605,7 @@
     var subjMeta = studySubjectMeta(timer.subject);
     var ringColor = timer.subject ? subjMeta.color : '#6C7A86';
 
-    var subjOpts = '<option value="">No subject</option>' + subs.map(function(s){
-      return '<option value="' + s.id + '"' + (s.id===timer.subject?' selected':'') + '>' + escapeHtml(s.short) + '</option>';
-    }).join('');
+    var subjOpts = subjectOptions(timer.subject, 'No subject');
 
     var presets = [15, 25, 50].map(function(m){
       return '<button type="button" class="tm-preset' + (timer.durationMin===m && !isCustomDur() ? ' active' : '') +
@@ -2628,9 +2635,7 @@
       '</div>';
 
     // ----- Manual log row -----
-    var manualSubjOpts = '<option value="">No subject</option>' + subs.map(function(s){
-      return '<option value="' + s.id + '">' + escapeHtml(s.short) + '</option>';
-    }).join('');
+    var manualSubjOpts = subjectOptions(null, 'No subject');
     var manualLog =
       '<div class="tm-manual">' +
         '<h3 class="section-title">Log time manually</h3>' +
@@ -2733,9 +2738,7 @@
   }
 
   function renderQuickAdd(defaultSubject, defaultLevel, accent){
-    var subjOptions = activeSubjects().map(function(s){
-      return '<option value="' + s.id + '"' + (s.id===defaultSubject?' selected':'') + '>' + s.short + '</option>';
-    }).join('');
+    var subjOptions = subjectOptions(defaultSubject);
     return (
       '<div class="quick-add' + (quickAddOpen?' open':'') + '" id="quickAddForm">' +
         '<div class="qa-row">' +
@@ -3651,8 +3654,7 @@
         // Fully reset in-memory state so nothing leaks to the next account.
         if (unsubscribeBinder){ unsubscribeBinder(); unsubscribeBinder = null; }
         binderRef = null; firstSnapshot = true; saveFailed = false;
-        ENTRIES = []; DISMISSED = []; MY_COURSES = []; FILES = []; GRADES = []; DECKS = []; STUDY_LOG = [];
-        SETTINGS = normalizeSettings(null); applyTheme();
+        loadBinder(null); applyTheme();
         fcDeckId = null; fcStudy = null;
         // Stop any running countdown and fully reset the timer so the chosen
         // subject/length never leaks into the next account's session.
